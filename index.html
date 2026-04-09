@@ -7,16 +7,36 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { background-color: #efeae2; font-family: 'Segoe UI', sans-serif; }
-        .chat-area { height: calc(100vh - 190px); scroll-behavior: smooth; }
+        /* Fundo da página (o que sobra nas laterais no PC) */
+        body { background-color: #d1d7db; font-family: 'Segoe UI', sans-serif; }
+        
+        /* Área de Chat dentro do contentor limitado */
+        .chat-area { height: calc(100vh - 190px); scroll-behavior: smooth; background-color: #efeae2; }
+        
         .bubble { max-width: 85%; border-radius: 12px; position: relative; animation: fadeIn 0.2s ease; cursor: pointer; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
         .my-msg { background-color: #dcf8c6; align-self: flex-end; border-top-right-radius: 2px; }
         .other-msg { background-color: #ffffff; align-self: flex-start; border-top-left-radius: 2px; }
+        
         .reply-tag { border-left: 3px solid #075e54; background: rgba(0,0,0,0.05); padding: 5px; margin-bottom: 5px; font-size: 0.8rem; color: #666; font-style: italic; border-radius: 4px; }
+        
         #login-screen { background: linear-gradient(135deg, #075e54 0%, #128c7e 100%); }
         .hidden { display: none !important; }
         .error-overlay { background: rgba(220, 38, 38, 0.9); color: white; padding: 10px; text-align: center; font-size: 12px; z-index: 100; position: fixed; top: 0; width: 100%; }
+        
+        /* Ajuste para o contentor centralizado */
+        .app-wrapper {
+            max-width: 500px;
+            margin: 0 auto;
+            background-color: #fff;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            border-left: 1px solid #e0e0e0;
+            border-right: 1px solid #e0e0e0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
     </style>
 </head>
 <body class="overflow-hidden">
@@ -44,8 +64,8 @@
         </div>
     </div>
 
-    <!-- Interface do Chat -->
-    <div id="chat-app" class="hidden flex flex-col h-screen">
+    <!-- Interface do Chat Centralizada -->
+    <div id="chat-app" class="hidden app-wrapper">
         <header class="bg-[#075e54] text-white p-4 flex justify-between items-center shadow-lg shrink-0">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 bg-teal-600 rounded-full flex items-center justify-center">
@@ -57,14 +77,14 @@
                 </div>
             </div>
             <div class="flex gap-4">
-                <button onclick="clearScreen()" title="Limpar Minha Tela" class="p-2 hover:bg-teal-700 rounded-full"><i class="fas fa-broom"></i></button>
-                <button onclick="logout()" title="Sair" class="p-2 hover:bg-teal-700 rounded-full"><i class="fas fa-sign-out-alt"></i></button>
+                <button onclick="clearScreen()" title="Limpar Minha Tela" class="p-2 hover:bg-teal-700 rounded-full transition"><i class="fas fa-broom"></i></button>
+                <button onclick="logout()" title="Sair" class="p-2 hover:bg-teal-700 rounded-full transition"><i class="fas fa-sign-out-alt"></i></button>
             </div>
         </header>
 
         <main id="chat-box" class="chat-area flex flex-col p-4 overflow-y-auto gap-4">
-            <div class="text-center text-gray-400 text-xs my-10">
-                <i class="fas fa-lock mr-2"></i> Mensagens protegidas
+            <div class="text-center text-gray-400 text-[10px] my-4 uppercase tracking-widest">
+                <i class="fas fa-lock mr-1"></i> Mensagens encriptadas
             </div>
         </main>
 
@@ -77,10 +97,10 @@
                 <button onclick="cancelReply()" class="text-red-500 p-2 font-bold text-xl">&times;</button>
             </div>
 
-            <div class="p-4 flex items-end gap-3 max-w-4xl mx-auto">
+            <div class="p-4 flex items-end gap-3">
                 <div class="flex-1 bg-white rounded-2xl shadow-sm p-1 flex flex-col border border-gray-300">
                     <textarea id="msg-input" placeholder="Escreva uma mensagem..." rows="1"
-                              class="w-full p-3 outline-none resize-none max-h-32 text-sm lg:text-base bg-transparent"></textarea>
+                              class="w-full p-3 outline-none resize-none max-h-32 text-sm bg-transparent"></textarea>
                 </div>
                 <div class="flex flex-col gap-2">
                     <button onclick="toggleEmojis()" class="w-10 h-10 bg-white text-gray-500 rounded-full shadow hover:text-teal-600 transition flex items-center justify-center">
@@ -92,7 +112,7 @@
                 </div>
             </div>
 
-            <div id="emoji-box" class="hidden grid grid-cols-5 gap-2 pb-4 px-4 bg-[#f0f0f0] max-w-md mx-auto">
+            <div id="emoji-box" class="hidden grid grid-cols-5 gap-2 pb-4 px-4 bg-[#f0f0f0]">
                 <button onclick="insertEmoji('😊')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">😊</button>
                 <button onclick="insertEmoji('😂')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">😂</button>
                 <button onclick="insertEmoji('😮')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">😮</button>
@@ -171,13 +191,10 @@
         };
 
         const startListening = () => {
-            // Regra 1: Caminho estrito conforme política de segurança
             const colRef = collection(db, 'artifacts', appIdSlug, 'public', 'data', 'messages');
-            
             onSnapshot(colRef, (snap) => {
                 const list = [];
                 snap.forEach(d => list.push({ id: d.id, ...d.data() }));
-                // Regra 2: Ordenação simples em memória
                 allMessages = list.sort((a,b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
                 render();
                 document.getElementById('error-msg').classList.add('hidden');
