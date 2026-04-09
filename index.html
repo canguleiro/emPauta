@@ -7,13 +7,43 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        /* Fundo da página (o que sobra nas laterais no PC) */
-        body { background-color: #d1d7db; font-family: 'Segoe UI', sans-serif; }
+        /* Fundo externo (visível apenas no PC) */
+        body { 
+            background-color: #d1d7db; 
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
         
-        /* Área de Chat dentro do contentor limitado */
-        .chat-area { height: calc(100vh - 190px); scroll-behavior: smooth; background-color: #efeae2; }
+        /* Contentor principal que limita a largura */
+        .main-app-container {
+            width: 100%;
+            max-width: 500px;
+            height: 100vh;
+            background-color: #efeae2;
+            position: relative;
+            box-shadow: 0 0 20px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid #ccc;
+            border-right: 1px solid #ccc;
+        }
+
+        /* Área de Mensagens */
+        .chat-area { 
+            flex: 1;
+            overflow-y: auto;
+            scroll-behavior: smooth; 
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
         
-        .bubble { max-width: 85%; border-radius: 12px; position: relative; animation: fadeIn 0.2s ease; cursor: pointer; }
+        .bubble { max-width: 85%; border-radius: 12px; position: relative; animation: fadeIn 0.2s ease; cursor: pointer; padding: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
         .my-msg { background-color: #dcf8c6; align-self: flex-end; border-top-right-radius: 2px; }
@@ -21,110 +51,112 @@
         
         .reply-tag { border-left: 3px solid #075e54; background: rgba(0,0,0,0.05); padding: 5px; margin-bottom: 5px; font-size: 0.8rem; color: #666; font-style: italic; border-radius: 4px; }
         
-        #login-screen { background: linear-gradient(135deg, #075e54 0%, #128c7e 100%); }
-        .hidden { display: none !important; }
-        .error-overlay { background: rgba(220, 38, 38, 0.9); color: white; padding: 10px; text-align: center; font-size: 12px; z-index: 100; position: fixed; top: 0; width: 100%; }
-        
-        /* Ajuste para o contentor centralizado */
-        .app-wrapper {
-            max-width: 500px;
-            margin: 0 auto;
-            background-color: #fff;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            border-left: 1px solid #e0e0e0;
-            border-right: 1px solid #e0e0e0;
-            height: 100vh;
+        /* Tela de Login adaptada ao contentor */
+        #login-screen { 
+            position: absolute;
+            inset: 0;
+            z-index: 50;
+            background: linear-gradient(135deg, #075e54 0%, #128c7e 100%); 
             display: flex;
-            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            transition: opacity 0.5s ease;
         }
+        
+        .hidden { display: none !important; }
+        .error-overlay { background: rgba(220, 38, 38, 0.9); color: white; padding: 10px; text-align: center; font-size: 12px; z-index: 100; position: absolute; top: 0; width: 100%; }
     </style>
 </head>
-<body class="overflow-hidden">
+<body>
 
-    <div id="error-msg" class="error-overlay hidden">
-        <i class="fas fa-exclamation-triangle mr-2"></i> <span id="error-text">Erro de ligação</span>
-    </div>
-
-    <!-- Tela de Login -->
-    <div id="login-screen" class="fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-500">
-        <div class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm text-center">
-            <h1 class="text-3xl font-bold text-teal-800 mb-1">Em Pauta</h1>
-            <p class="text-gray-400 text-sm mb-6">Comunicação Instantânea</p>
-            
-            <input type="password" id="pass-input" placeholder="Senha de Acesso" 
-                   class="w-full p-4 bg-gray-100 rounded-xl mb-4 text-center text-xl focus:ring-2 ring-teal-500 outline-none transition-all">
-            
-            <input type="text" id="nick-input" placeholder="Seu Apelido" 
-                   class="w-full p-4 bg-gray-100 rounded-xl mb-6 text-center focus:ring-2 ring-teal-500 outline-none transition-all">
-            
-            <button onclick="attemptLogin()" class="w-full bg-teal-700 hover:bg-teal-900 text-white font-bold py-4 rounded-xl shadow-lg transition-transform active:scale-95">
-                ENTRAR NO CHAT
-            </button>
-            <p id="status-text" class="text-[10px] mt-4 text-gray-400 italic">A verificar base de dados...</p>
+    <div class="main-app-container">
+        <!-- Notificação de Erro -->
+        <div id="error-msg" class="error-overlay hidden">
+            <i class="fas fa-exclamation-triangle mr-2"></i> <span id="error-text">Erro de ligação</span>
         </div>
-    </div>
 
-    <!-- Interface do Chat Centralizada -->
-    <div id="chat-app" class="hidden app-wrapper">
-        <header class="bg-[#075e54] text-white p-4 flex justify-between items-center shadow-lg shrink-0">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-teal-600 rounded-full flex items-center justify-center">
-                    <i class="fas fa-comments text-white"></i>
-                </div>
-                <div>
-                    <h1 class="font-bold leading-none">Em Pauta</h1>
-                    <span id="display-nick" class="text-[10px] text-teal-200 uppercase tracking-widest"></span>
-                </div>
+        <!-- Tela de Login -->
+        <div id="login-screen">
+            <div class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm text-center">
+                <h1 class="text-3xl font-bold text-teal-800 mb-1">Em Pauta</h1>
+                <p class="text-gray-400 text-sm mb-6">Comunicação Instantânea</p>
+                
+                <input type="password" id="pass-input" placeholder="Senha de Acesso" 
+                       class="w-full p-4 bg-gray-100 rounded-xl mb-4 text-center text-xl focus:ring-2 ring-teal-500 outline-none transition-all">
+                
+                <input type="text" id="nick-input" placeholder="Seu Apelido" 
+                       class="w-full p-4 bg-gray-100 rounded-xl mb-6 text-center focus:ring-2 ring-teal-500 outline-none transition-all">
+                
+                <button onclick="attemptLogin()" class="w-full bg-teal-700 hover:bg-teal-900 text-white font-bold py-4 rounded-xl shadow-lg transition-transform active:scale-95">
+                    ENTRAR NO CHAT
+                </button>
+                <p id="status-text" class="text-[10px] mt-4 text-gray-400 italic">A verificar base de dados...</p>
             </div>
-            <div class="flex gap-4">
-                <button onclick="clearScreen()" title="Limpar Minha Tela" class="p-2 hover:bg-teal-700 rounded-full transition"><i class="fas fa-broom"></i></button>
-                <button onclick="logout()" title="Sair" class="p-2 hover:bg-teal-700 rounded-full transition"><i class="fas fa-sign-out-alt"></i></button>
-            </div>
-        </header>
+        </div>
 
-        <main id="chat-box" class="chat-area flex flex-col p-4 overflow-y-auto gap-4">
-            <div class="text-center text-gray-400 text-[10px] my-4 uppercase tracking-widest">
-                <i class="fas fa-lock mr-1"></i> Mensagens encriptadas
-            </div>
-        </main>
-
-        <footer class="bg-[#f0f0f0] shrink-0 border-t border-gray-200">
-            <div id="reply-bar" class="hidden bg-gray-200 p-2 border-l-4 border-teal-700 mx-4 mt-2 rounded-lg flex justify-between items-center">
-                <div class="px-2 overflow-hidden">
-                    <p class="text-[9px] font-bold text-teal-700 uppercase">A responder a</p>
-                    <p id="reply-preview-text" class="text-xs text-gray-600 truncate italic"></p>
+        <!-- Interface do Chat -->
+        <div id="chat-app" class="hidden flex flex-col h-full">
+            <header class="bg-[#075e54] text-white p-4 flex justify-between items-center shadow-lg shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-teal-600 rounded-full flex items-center justify-center">
+                        <i class="fas fa-comments text-white"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold leading-none">Em Pauta</h1>
+                        <span id="display-nick" class="text-[10px] text-teal-200 uppercase tracking-widest"></span>
+                    </div>
                 </div>
-                <button onclick="cancelReply()" class="text-red-500 p-2 font-bold text-xl">&times;</button>
-            </div>
-
-            <div class="p-4 flex items-end gap-3">
-                <div class="flex-1 bg-white rounded-2xl shadow-sm p-1 flex flex-col border border-gray-300">
-                    <textarea id="msg-input" placeholder="Escreva uma mensagem..." rows="1"
-                              class="w-full p-3 outline-none resize-none max-h-32 text-sm bg-transparent"></textarea>
+                <div class="flex gap-4">
+                    <button onclick="clearScreen()" title="Limpar Minha Tela" class="p-2 hover:bg-teal-700 rounded-full transition"><i class="fas fa-broom"></i></button>
+                    <button onclick="logout()" title="Sair" class="p-2 hover:bg-teal-700 rounded-full transition"><i class="fas fa-sign-out-alt"></i></button>
                 </div>
-                <div class="flex flex-col gap-2">
-                    <button onclick="toggleEmojis()" class="w-10 h-10 bg-white text-gray-500 rounded-full shadow hover:text-teal-600 transition flex items-center justify-center">
-                        <i class="far fa-smile text-xl"></i>
-                    </button>
-                    <button id="send-btn" onclick="doSendMessage()" class="w-12 h-12 bg-[#00a884] text-white rounded-full shadow-xl hover:bg-[#008f72] flex items-center justify-center transition-transform active:scale-90">
-                        <i class="fas fa-paper-plane text-lg"></i>
-                    </button>
-                </div>
-            </div>
+            </header>
 
-            <div id="emoji-box" class="hidden grid grid-cols-5 gap-2 pb-4 px-4 bg-[#f0f0f0]">
-                <button onclick="insertEmoji('😊')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">😊</button>
-                <button onclick="insertEmoji('😂')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">😂</button>
-                <button onclick="insertEmoji('😮')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">😮</button>
-                <button onclick="insertEmoji('😢')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">😢</button>
-                <button onclick="insertEmoji('❤️')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">❤️</button>
-                <button onclick="insertEmoji('👍')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">👍</button>
-                <button onclick="insertEmoji('🙏')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">🙏</button>
-                <button onclick="insertEmoji('🔥')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">🔥</button>
-                <button onclick="insertEmoji('✅')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">✅</button>
-                <button onclick="insertEmoji('⚠️')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">⚠️</button>
-            </div>
-        </footer>
+            <main id="chat-box" class="chat-area">
+                <div class="text-center text-gray-400 text-[10px] my-4 uppercase tracking-widest">
+                    <i class="fas fa-lock mr-1"></i> Mensagens encriptadas
+                </div>
+            </main>
+
+            <footer class="bg-[#f0f0f0] shrink-0 border-t border-gray-200">
+                <div id="reply-bar" class="hidden bg-gray-200 p-2 border-l-4 border-teal-700 mx-4 mt-2 rounded-lg flex justify-between items-center">
+                    <div class="px-2 overflow-hidden">
+                        <p class="text-[9px] font-bold text-teal-700 uppercase">A responder a</p>
+                        <p id="reply-preview-text" class="text-xs text-gray-600 truncate italic"></p>
+                    </div>
+                    <button onclick="cancelReply()" class="text-red-500 p-2 font-bold text-xl">&times;</button>
+                </div>
+
+                <div class="p-4 flex items-end gap-3">
+                    <div class="flex-1 bg-white rounded-2xl shadow-sm p-1 flex flex-col border border-gray-300">
+                        <textarea id="msg-input" placeholder="Escreva uma mensagem..." rows="1"
+                                  class="w-full p-3 outline-none resize-none max-h-32 text-sm bg-transparent"></textarea>
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <button onclick="toggleEmojis()" class="w-10 h-10 bg-white text-gray-500 rounded-full shadow hover:text-teal-600 transition flex items-center justify-center">
+                            <i class="far fa-smile text-xl"></i>
+                        </button>
+                        <button id="send-btn" onclick="doSendMessage()" class="w-12 h-12 bg-[#00a884] text-white rounded-full shadow-xl hover:bg-[#008f72] flex items-center justify-center transition-transform active:scale-90">
+                            <i class="fas fa-paper-plane text-lg"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="emoji-box" class="hidden grid grid-cols-5 gap-2 pb-4 px-4 bg-[#f0f0f0]">
+                    <button onclick="insertEmoji('😊')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">😊</button>
+                    <button onclick="insertEmoji('😂')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">😂</button>
+                    <button onclick="insertEmoji('😮')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">😮</button>
+                    <button onclick="insertEmoji('😢')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">😢</button>
+                    <button onclick="insertEmoji('❤️')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">❤️</button>
+                    <button onclick="insertEmoji('👍')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">👍</button>
+                    <button onclick="insertEmoji('🙏')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">🙏</button>
+                    <button onclick="insertEmoji('🔥')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">🔥</button>
+                    <button onclick="insertEmoji('✅')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">✅</button>
+                    <button onclick="insertEmoji('⚠️')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">⚠️</button>
+                </div>
+            </footer>
+        </div>
     </div>
 
     <script type="module">
@@ -208,11 +240,11 @@
         const render = () => {
             const box = document.getElementById('chat-box');
             box.innerHTML = "";
-            const visible = allMessages.slice(filterIndex);
-            visible.forEach(m => {
+            allMessages.slice(filterIndex).forEach(m => {
                 const isMe = m.sender === myNick;
                 const div = document.createElement('div');
-                div.className = `bubble p-3 shadow-sm flex flex-col ${isMe ? 'my-msg' : 'other-msg'}`;
+                div.className = `bubble flex flex-col ${isMe ? 'my-msg' : 'other-msg'}`;
+                
                 div.ondblclick = () => {
                     replyTarget = { sender: m.sender, text: m.text };
                     document.getElementById('reply-preview-text').innerText = `${m.sender}: ${m.text}`;
