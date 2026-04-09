@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Em Pauta - PWA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { background-color: #efeae2; font-family: 'Segoe UI', sans-serif; }
+        .chat-area { height: calc(100vh - 180px); scroll-behavior: smooth; }
+        .bubble { max-width: 85%; border-radius: 12px; position: relative; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .my-msg { background-color: #dcf8c6; align-self: flex-end; border-top-right-radius: 2px; }
+        .other-msg { background-color: #ffffff; align-self: flex-start; border-top-left-radius: 2px; }
+        .reply-tag { border-left: 3px solid #075e54; background: rgba(0,0,0,0.05); padding: 5px; margin-bottom: 5px; font-size: 0.8rem; color: #666; font-style: italic; border-radius: 4px; }
+        #login-screen { background: linear-gradient(135deg, #075e54 0%, #128c7e 100%); }
+    </style>
+</head>
+<body class="overflow-hidden">
+
+    <!-- Tela de Login -->
+    <div id="login-screen" class="fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-500">
+        <div class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm text-center">
+            <h1 class="text-3xl font-bold text-teal-800 mb-1">Em Pauta</h1>
+            <p class="text-gray-400 text-sm mb-6">Comunicação Instantânea</p>
+            
+            <input type="password" id="pass-input" placeholder="Senha de Acesso" 
+                   class="w-full p-4 bg-gray-100 rounded-xl mb-4 text-center text-xl focus:ring-2 ring-teal-500 outline-none transition-all">
+            
+            <input type="text" id="nick-input" placeholder="Seu Apelido" 
+                   class="w-full p-4 bg-gray-100 rounded-xl mb-6 text-center focus:ring-2 ring-teal-500 outline-none transition-all">
+            
+            <button onclick="attemptLogin()" class="w-full bg-teal-700 hover:bg-teal-900 text-white font-bold py-4 rounded-xl shadow-lg transition-transform active:scale-95">
+                ENTRAR NO CHAT
+            </button>
+        </div>
+    </div>
+
+    <!-- Interface do Chat -->
+    <div id="chat-app" class="hidden flex flex-col h-screen">
+        <!-- Header -->
+        <header class="bg-[#075e54] text-white p-4 flex justify-between items-center shadow-lg shrink-0">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-teal-600 rounded-full flex items-center justify-center">
+                    <i class="fas fa-comments"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold leading-none">Em Pauta</h1>
+                    <span id="display-nick" class="text-[10px] text-teal-200 uppercase tracking-widest"></span>
+                </div>
+            </div>
+            <div class="flex gap-4">
+                <button onclick="clearScreen()" title="Limpar Tela" class="p-2 hover:bg-teal-700 rounded-full"><i class="fas fa-broom"></i></button>
+                <button onclick="location.reload()" title="Sair" class="p-2 hover:bg-teal-700 rounded-full"><i class="fas fa-sign-out-alt"></i></button>
+            </div>
+        </header>
+
+        <!-- Mensagens -->
+        <main id="chat-box" class="chat-area flex flex-col p-4 overflow-y-auto gap-4">
+            <!-- Balões de mensagem -->
+        </main>
+
+        <!-- Barra de Resposta -->
+        <div id="reply-bar" class="hidden bg-gray-200 p-2 border-l-4 border-teal-700 mx-4 mt-2 rounded-lg flex justify-between items-center animate-bounce-in">
+            <div class="px-2 overflow-hidden">
+                <p class="text-[9px] font-bold text-teal-700">RESPONDENDO A</p>
+                <p id="reply-preview" class="text-xs text-gray-600 truncate italic"></p>
+            </div>
+            <button onclick="cancelReply()" class="text-red-500 p-2 font-bold text-xl">&times;</button>
+        </div>
+
+        <!-- Rodapé -->
+        <footer class="p-4 bg-[#f0f0f0] shrink-0 border-t border-gray-200">
+            <div class="flex items-end gap-3 max-w-4xl mx-auto">
+                <div class="flex-1 bg-white rounded-2xl shadow-sm p-1 flex flex-col">
+                    <textarea id="msg-input" placeholder="Digite uma mensagem..." rows="1"
+                              class="w-full p-3 outline-none resize-none max-h-32 text-sm lg:text-base bg-transparent"></textarea>
+                </div>
+                
+                <div class="flex flex-col gap-2">
+                    <button onclick="toggleEmojis()" class="w-10 h-10 bg-white text-gray-500 rounded-full shadow hover:text-teal-600 transition flex items-center justify-center">
+                        <i class="far fa-smile text-xl"></i>
+                    </button>
+                    <button onclick="doSendMessage()" class="w-12 h-12 bg-[#00a884] text-white rounded-full shadow-xl hover:bg-[#008f72] flex items-center justify-center transition-transform active:scale-90">
+                        <i class="fas fa-paper-plane text-lg"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Seletor de Emojis -->
+            <div id="emoji-box" class="hidden grid grid-cols-5 gap-2 mt-4 p-3 bg-white rounded-2xl shadow-inner max-w-md mx-auto">
+                <button onclick="insertEmoji('😊')" class="text-2xl p-2 hover:bg-gray-100 rounded-lg">😊</button>
+                <button onclick="insertEmoji('😂')" class="text-2xl p-2 hover:bg-gray-100 rounded-lg">😂</button>
+                <button onclick="insertEmoji('😮')" class="text-2xl p-2 hover:bg-gray-100 rounded-lg">😮</button>
+                <button onclick="insertEmoji('😢')" class="text-2xl p-2 hover:bg-gray-100 rounded-lg">😢</button>
+                <button onclick="insertEmoji('❤️')" class="text-2xl p-2 hover:bg-gray-100 rounded-lg">❤️</button>
+                <button onclick="insertEmoji('👍')" class="text-2xl p-2 hover:bg-gray-100 rounded-lg">👍</button>
+                <button onclick="insertEmoji('🙏')" class="text-2xl p-2 hover:bg-gray-100 rounded-lg">🙏</button>
+                <button onclick="insertEmoji('🔥')" class="text-2xl p-2 hover:bg-gray-100 rounded-lg">🔥</button>
+                <button onclick="insertEmoji('✅')" class="text-2xl p-2 hover:bg-gray-100 rounded-lg">✅</button>
+                <button onclick="insertEmoji('⚠️')" class="text-2xl p-2 hover:bg-gray-100 rounded-lg">⚠️</button>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Scripts do Firebase v11 -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Variáveis de ambiente
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        let currentUser = null;
+        let myNick = localStorage.getItem('empauta_nick_web') || "";
+        let replyTarget = null;
+        let allMessages = [];
+        let filterCount = 0;
+
+        // Regra 3: Autenticar imediatamente
+        const startAuth = async () => {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+        };
+
+        onAuthStateChanged(auth, (user) => {
+            currentUser = user;
+            if (user && myNick) startListening();
+        });
+
+        startAuth();
+
+        // Funções Globais expostas ao HTML
+        window.attemptLogin = () => {
+            const pass = document.getElementById('pass-input').value;
+            const nick = document.getElementById('nick-input').value.trim();
+            
+            if (pass === "2407" && nick) {
+                myNick = nick;
+                localStorage.setItem('empauta_nick_web', nick);
+                document.getElementById('login-screen').classList.add('hidden');
+                document.getElementById('chat-app').classList.remove('hidden');
+                document.getElementById('display-nick').innerText = myNick;
+                if (currentUser) startListening();
+            } else {
+                alert("Verifique a senha e o apelido.");
+            }
+        };
+
+        window.doSendMessage = async () => {
+            const input = document.getElementById('msg-input');
+            const text = input.value.trim();
+            if (!text || !currentUser) return;
+
+            const payload = {
+                sender: myNick,
+                text: text,
+                reply: replyTarget ? `${replyTarget.sender}: ${replyTarget.text}` : null,
+                timestamp: serverTimestamp(),
+                uid: currentUser.uid
+            };
+
+            input.value = "";
+            input.style.height = "auto";
+            window.cancelReply();
+            
+            try {
+                // Regra 1: Caminho estrito
+                const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'messages');
+                await addDoc(colRef, payload);
+            } catch (e) { console.error(e); }
+        };
+
+        const startListening = () => {
+            if (!currentUser) return;
+            const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'messages');
+            
+            // Regra 2: Busca simples + ordenação em memória
+            onSnapshot(colRef, (snap) => {
+                const list = [];
+                snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+                allMessages = list.sort((a,b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
+                render();
+            }, (err) => console.error("Erro permissão:", err));
+        };
+
+        const render = () => {
+            const box = document.getElementById('chat-box');
+            box.innerHTML = "";
+            const activeMsgs = allMessages.slice(filterCount);
+
+            activeMsgs.forEach(m => {
+                const isMe = m.sender === myNick;
+                const div = document.createElement('div');
+                div.className = `bubble p-3 shadow-sm flex flex-col ${isMe ? 'my-msg' : 'other-msg'}`;
+                
+                div.ondblclick = () => {
+                    replyTarget = { sender: m.sender, text: m.text };
+                    document.getElementById('reply-preview').innerText = `${m.sender}: ${m.text}`;
+                    document.getElementById('reply-bar').classList.remove('hidden');
+                    document.getElementById('msg-input').focus();
+                };
+
+                let replyHtml = m.reply ? `<div class="reply-tag">${m.reply}</div>` : "";
+                
+                div.innerHTML = `
+                    <span class="text-[9px] font-bold text-teal-700 uppercase mb-1">${m.sender}</span>
+                    ${replyHtml}
+                    <p class="text-sm text-gray-800 break-words whitespace-pre-wrap">${m.text}</p>
+                    <span class="text-[8px] text-gray-400 text-right mt-1">${m.timestamp ? new Date(m.timestamp.seconds * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '...'}</span>
+                `;
+                box.appendChild(div);
+            });
+            box.scrollTop = box.scrollHeight;
+        };
+
+        window.clearScreen = () => {
+            filterCount = allMessages.length;
+            render();
+        };
+
+        window.cancelReply = () => {
+            replyTarget = null;
+            document.getElementById('reply-bar').classList.add('hidden');
+        };
+
+        window.insertEmoji = (e) => {
+            document.getElementById('msg-input').value += e;
+            document.getElementById('emoji-box').classList.add('hidden');
+            document.getElementById('msg-input').focus();
+        };
+
+        window.toggleEmojis = () => document.getElementById('emoji-box').classList.toggle('hidden');
+
+        // Auto-expand textarea
+        document.getElementById('msg-input').addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+
+        document.getElementById('msg-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                window.doSendMessage();
+            }
+        });
+
+        // Recuperar nick salvo no input de login
+        if (myNick) document.getElementById('nick-input').value = myNick;
+
+    </script>
+</body>
+</html>
