@@ -16,9 +16,14 @@
         .reply-tag { border-left: 3px solid #075e54; background: rgba(0,0,0,0.05); padding: 5px; margin-bottom: 5px; font-size: 0.8rem; color: #666; font-style: italic; border-radius: 4px; }
         #login-screen { background: linear-gradient(135deg, #075e54 0%, #128c7e 100%); }
         .hidden { display: none !important; }
+        .error-overlay { background: rgba(220, 38, 38, 0.9); color: white; padding: 10px; text-align: center; font-size: 12px; z-index: 100; position: fixed; top: 0; width: 100%; }
     </style>
 </head>
 <body class="overflow-hidden">
+
+    <div id="error-msg" class="error-overlay hidden">
+        <i class="fas fa-exclamation-triangle mr-2"></i> <span id="error-text">Erro de ligação</span>
+    </div>
 
     <!-- Tela de Login -->
     <div id="login-screen" class="fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-500">
@@ -35,17 +40,16 @@
             <button onclick="attemptLogin()" class="w-full bg-teal-700 hover:bg-teal-900 text-white font-bold py-4 rounded-xl shadow-lg transition-transform active:scale-95">
                 ENTRAR NO CHAT
             </button>
-            <p id="status-text" class="text-[10px] mt-4 text-gray-400 italic">Pronto para conectar.</p>
+            <p id="status-text" class="text-[10px] mt-4 text-gray-400 italic">A verificar base de dados...</p>
         </div>
     </div>
 
     <!-- Interface do Chat -->
     <div id="chat-app" class="hidden flex flex-col h-screen">
-        <!-- Header -->
         <header class="bg-[#075e54] text-white p-4 flex justify-between items-center shadow-lg shrink-0">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 bg-teal-600 rounded-full flex items-center justify-center">
-                    <i class="fas fa-comments"></i>
+                    <i class="fas fa-comments text-white"></i>
                 </div>
                 <div>
                     <h1 class="font-bold leading-none">Em Pauta</h1>
@@ -58,28 +62,26 @@
             </div>
         </header>
 
-        <!-- Mensagens -->
         <main id="chat-box" class="chat-area flex flex-col p-4 overflow-y-auto gap-4">
-            <!-- Balões carregados dinamicamente -->
+            <div class="text-center text-gray-400 text-xs my-10">
+                <i class="fas fa-lock mr-2"></i> Mensagens protegidas
+            </div>
         </main>
 
-        <!-- Rodapé -->
         <footer class="bg-[#f0f0f0] shrink-0 border-t border-gray-200">
-            <!-- Barra de Resposta (Aparece ao dar duplo clique) -->
-            <div id="reply-bar" class="hidden bg-gray-200 p-2 border-l-4 border-teal-700 mx-4 mt-2 rounded-lg flex justify-between items-center animate-pulse">
+            <div id="reply-bar" class="hidden bg-gray-200 p-2 border-l-4 border-teal-700 mx-4 mt-2 rounded-lg flex justify-between items-center">
                 <div class="px-2 overflow-hidden">
-                    <p class="text-[9px] font-bold text-teal-700 uppercase">Respondendo a</p>
+                    <p class="text-[9px] font-bold text-teal-700 uppercase">A responder a</p>
                     <p id="reply-preview-text" class="text-xs text-gray-600 truncate italic"></p>
                 </div>
                 <button onclick="cancelReply()" class="text-red-500 p-2 font-bold text-xl">&times;</button>
             </div>
 
             <div class="p-4 flex items-end gap-3 max-w-4xl mx-auto">
-                <div class="flex-1 bg-white rounded-2xl shadow-sm p-1 flex flex-col">
-                    <textarea id="msg-input" placeholder="Digite uma mensagem..." rows="1"
+                <div class="flex-1 bg-white rounded-2xl shadow-sm p-1 flex flex-col border border-gray-300">
+                    <textarea id="msg-input" placeholder="Escreva uma mensagem..." rows="1"
                               class="w-full p-3 outline-none resize-none max-h-32 text-sm lg:text-base bg-transparent"></textarea>
                 </div>
-                
                 <div class="flex flex-col gap-2">
                     <button onclick="toggleEmojis()" class="w-10 h-10 bg-white text-gray-500 rounded-full shadow hover:text-teal-600 transition flex items-center justify-center">
                         <i class="far fa-smile text-xl"></i>
@@ -90,7 +92,6 @@
                 </div>
             </div>
 
-            <!-- Menu de Emojis -->
             <div id="emoji-box" class="hidden grid grid-cols-5 gap-2 pb-4 px-4 bg-[#f0f0f0] max-w-md mx-auto">
                 <button onclick="insertEmoji('😊')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">😊</button>
                 <button onclick="insertEmoji('😂')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">😂</button>
@@ -106,13 +107,11 @@
         </footer>
     </div>
 
-    <!-- Firebase SDK v11 -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // CONFIGURAÇÃO DO USUÁRIO
         const firebaseConfig = {
             apiKey: "AIzaSyASQkgnQkeKjXKrmT3yMV9zcUVxec3NvrA",
             authDomain: "em-pauta-d6e92.firebaseapp.com",
@@ -122,43 +121,45 @@
             appId: "1:94994518950:web:e60bb5bc83558752f47567"
         };
 
-        // Inicialização
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appIdSlug = "em-pauta-main"; // Identificador para a coleção pública
+        const appIdSlug = "em-pauta-main"; 
 
         let currentUser = null;
-        let myNick = localStorage.getItem('empauta_nick_v2') || "";
+        let myNick = localStorage.getItem('empauta_nick_v3') || "";
         let replyTarget = null;
         let allMessages = [];
         let filterIndex = 0;
 
-        // Autenticação Automática
+        function showError(text) {
+            const errDiv = document.getElementById('error-msg');
+            const errText = document.getElementById('error-text');
+            errText.innerText = text;
+            errDiv.classList.remove('hidden');
+        }
+
         onAuthStateChanged(auth, (user) => {
             currentUser = user;
             if (user) {
-                console.log("Conectado anonimamente:", user.uid);
-                document.getElementById('status-text').innerText = "Conexão estabelecida.";
+                document.getElementById('status-text').innerText = "Ligado. Pode entrar.";
                 if (myNick) startChatSession();
             }
         });
 
         signInAnonymously(auth).catch(e => {
-            document.getElementById('status-text').innerText = "Erro de conexão.";
-            console.error(e);
+            showError("A autenticação falhou! Ative o acesso 'Anónimo' no menu Authentication do Firebase.");
         });
 
         window.attemptLogin = () => {
             const pass = document.getElementById('pass-input').value;
             const nick = document.getElementById('nick-input').value.trim();
-            
             if (pass === "2407" && nick) {
                 myNick = nick;
-                localStorage.setItem('empauta_nick_v2', nick);
+                localStorage.setItem('empauta_nick_v3', nick);
                 startChatSession();
             } else {
-                alert("Senha incorreta ou apelido vazio.");
+                alert("Senha ou apelido inválidos.");
             }
         };
 
@@ -176,13 +177,13 @@
             onSnapshot(colRef, (snap) => {
                 const list = [];
                 snap.forEach(d => list.push({ id: d.id, ...d.data() }));
-                // Regra 2: Ordenação em memória
+                // Regra 2: Ordenação simples em memória
                 allMessages = list.sort((a,b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
                 render();
+                document.getElementById('error-msg').classList.add('hidden');
             }, (err) => {
-                console.error("Erro no banco:", err);
                 if (err.code === 'permission-denied') {
-                    alert("Acesso negado. Certifique-se de ter configurado as REGRAS do Firestore no console.");
+                    showError("Erro de Permissão! Verifique se as Regras (Rules) foram publicadas no Firestore.");
                 }
             });
         };
@@ -191,24 +192,19 @@
             const box = document.getElementById('chat-box');
             box.innerHTML = "";
             const visible = allMessages.slice(filterIndex);
-
             visible.forEach(m => {
                 const isMe = m.sender === myNick;
                 const div = document.createElement('div');
                 div.className = `bubble p-3 shadow-sm flex flex-col ${isMe ? 'my-msg' : 'other-msg'}`;
-                
                 div.ondblclick = () => {
                     replyTarget = { sender: m.sender, text: m.text };
                     document.getElementById('reply-preview-text').innerText = `${m.sender}: ${m.text}`;
                     document.getElementById('reply-bar').classList.remove('hidden');
                     document.getElementById('msg-input').focus();
                 };
-
-                let replyHtml = m.reply ? `<div class="reply-tag">${m.reply}</div>` : "";
-                
                 div.innerHTML = `
                     <span class="text-[9px] font-bold text-teal-700 uppercase mb-1">${m.sender}</span>
-                    ${replyHtml}
+                    ${m.reply ? `<div class="reply-tag">${m.reply}</div>` : ""}
                     <p class="text-sm text-gray-800 break-words whitespace-pre-wrap">${m.text}</p>
                     <span class="text-[8px] text-gray-400 text-right mt-1">
                         ${m.timestamp ? new Date(m.timestamp.seconds * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '...'}
@@ -223,7 +219,6 @@
             const input = document.getElementById('msg-input');
             const text = input.value.trim();
             if (!text || !currentUser) return;
-
             const payload = {
                 sender: myNick,
                 text: text,
@@ -231,20 +226,16 @@
                 timestamp: serverTimestamp(),
                 uid: currentUser.uid
             };
-
             input.value = "";
             input.style.height = "auto";
             window.cancelReply();
-            
             try {
                 const colRef = collection(db, 'artifacts', appIdSlug, 'public', 'data', 'messages');
                 await addDoc(colRef, payload);
-            } catch (e) { 
-                console.error("Falha no envio:", e);
-            }
+            } catch (e) { showError("Erro ao enviar! Verifique as regras de escrita."); }
         };
 
-        window.logout = () => { localStorage.removeItem('empauta_nick_v2'); location.reload(); };
+        window.logout = () => { localStorage.removeItem('empauta_nick_v3'); location.reload(); };
         window.clearScreen = () => { filterIndex = allMessages.length; render(); };
         window.cancelReply = () => { replyTarget = null; document.getElementById('reply-bar').classList.add('hidden'); };
         window.toggleEmojis = () => document.getElementById('emoji-box').classList.toggle('hidden');
@@ -255,20 +246,13 @@
             input.focus(); 
         };
 
-        // Textarea auto-expand
         document.getElementById('msg-input').addEventListener('input', function() {
-            this.style.height = 'auto'; 
-            this.style.height = (this.scrollHeight) + 'px';
+            this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px';
         });
 
         document.getElementById('msg-input').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) { 
-                e.preventDefault(); 
-                window.doSendMessage(); 
-            }
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); window.doSendMessage(); }
         });
-
-        if (myNick) document.getElementById('nick-input').value = myNick;
     </script>
 </body>
 </html>
