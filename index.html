@@ -3,157 +3,145 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Em Pauta - PWA</title>
+    <title>Em Pauta - Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        /* Fundo externo (visível apenas no PC) */
-        body { 
-            background-color: #d1d7db; 
-            font-family: 'Segoe UI', sans-serif;
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            height: 100vh;
-            overflow: hidden;
-        }
+        :root { --app-bg: #efeae2; --header-bg: #075e54; }
         
-        /* Contentor principal que limita a largura */
+        /* Transição suave para Modo Escuro */
+        body.dark { --app-bg: #0b141a; --header-bg: #202c33; background-color: #0b141a !important; }
+        
+        body { background-color: #d1d7db; font-family: 'Segoe UI', sans-serif; transition: background 0.3s ease; }
+        
         .main-app-container {
-            width: 100%;
-            max-width: 500px;
-            height: 100vh;
-            background-color: #efeae2;
-            position: relative;
-            box-shadow: 0 0 20px rgba(0,0,0,0.2);
-            display: flex;
-            flex-direction: column;
-            border-left: 1px solid #ccc;
-            border-right: 1px solid #ccc;
+            width: 100%; max-width: 500px; height: 100vh;
+            background-color: var(--app-bg);
+            position: relative; box-shadow: 0 0 30px rgba(0,0,0,0.2);
+            display: flex; flex-direction: column; transition: background 0.3s ease;
         }
 
-        /* Área de Mensagens */
         .chat-area { 
-            flex: 1;
-            overflow-y: auto;
-            scroll-behavior: smooth; 
-            padding: 1rem;
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
+            flex: 1; overflow-y: auto; scroll-behavior: smooth; 
+            padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem;
         }
         
-        .bubble { max-width: 85%; border-radius: 12px; position: relative; animation: fadeIn 0.2s ease; cursor: pointer; padding: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        /* Balões Estilizados */
+        .bubble { 
+            max-width: 85%; border-radius: 12px; position: relative; 
+            animation: fadeIn 0.2s ease; cursor: pointer; padding: 10px 14px; 
+            box-shadow: 0 1px 1px rgba(0,0,0,0.1); 
+        }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
         .my-msg { background-color: #dcf8c6; align-self: flex-end; border-top-right-radius: 2px; }
         .other-msg { background-color: #ffffff; align-self: flex-start; border-top-left-radius: 2px; }
         
-        .reply-tag { border-left: 3px solid #075e54; background: rgba(0,0,0,0.05); padding: 5px; margin-bottom: 5px; font-size: 0.8rem; color: #666; font-style: italic; border-radius: 4px; }
+        /* Modo Escuro para Balões */
+        body.dark .my-msg { background-color: #005c4b; color: #e9edef; }
+        body.dark .other-msg { background-color: #202c33; color: #e9edef; }
+        body.dark .text-gray-800 { color: #e9edef !important; }
+        body.dark .text-gray-400 { color: #8696a0 !important; }
+
+        .reply-tag { 
+            border-left: 4px solid #075e54; background: rgba(0,0,0,0.06); 
+            padding: 6px; margin-bottom: 6px; font-size: 0.8rem; 
+            color: #555; font-style: italic; border-radius: 4px; display: block;
+        }
+        body.dark .reply-tag { background: rgba(255,255,255,0.05); color: #a1a1a1; }
         
-        /* Tela de Login adaptada ao contentor */
         #login-screen { 
-            position: absolute;
-            inset: 0;
-            z-index: 50;
+            position: absolute; inset: 0; z-index: 50;
             background: linear-gradient(135deg, #075e54 0%, #128c7e 100%); 
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 1.5rem;
-            transition: opacity 0.5s ease;
+            display: flex; align-items: center; justify-content: center; padding: 1.5rem;
         }
         
         .hidden { display: none !important; }
-        .error-overlay { background: rgba(220, 38, 38, 0.9); color: white; padding: 10px; text-align: center; font-size: 12px; z-index: 100; position: absolute; top: 0; width: 100%; }
+        footer { background-color: #f0f0f0; border-top: 1px solid #e0e0e0; }
+        body.dark footer { background-color: #202c33; border-top: 1px solid #2f3b37; }
+        body.dark textarea { background: #2a3942; color: white; }
     </style>
 </head>
 <body>
 
     <div class="main-app-container">
-        <!-- Notificação de Erro -->
-        <div id="error-msg" class="error-overlay hidden">
-            <i class="fas fa-exclamation-triangle mr-2"></i> <span id="error-text">Erro de ligação</span>
-        </div>
-
-        <!-- Tela de Login -->
+        <!-- Login -->
         <div id="login-screen">
-            <div class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm text-center">
+            <div class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-[340px] text-center">
                 <h1 class="text-3xl font-bold text-teal-800 mb-1">Em Pauta</h1>
-                <p class="text-gray-400 text-sm mb-6">Comunicação Instantânea</p>
-                
-                <input type="password" id="pass-input" placeholder="Senha de Acesso" 
-                       class="w-full p-4 bg-gray-100 rounded-xl mb-4 text-center text-xl focus:ring-2 ring-teal-500 outline-none transition-all">
-                
-                <input type="text" id="nick-input" placeholder="Seu Apelido" 
-                       class="w-full p-4 bg-gray-100 rounded-xl mb-6 text-center focus:ring-2 ring-teal-500 outline-none transition-all">
-                
-                <button onclick="attemptLogin()" class="w-full bg-teal-700 hover:bg-teal-900 text-white font-bold py-4 rounded-xl shadow-lg transition-transform active:scale-95">
-                    ENTRAR NO CHAT
-                </button>
-                <p id="status-text" class="text-[10px] mt-4 text-gray-400 italic">A verificar base de dados...</p>
+                <p class="text-gray-400 text-sm mb-6 uppercase tracking-widest text-[10px]">Cloud Messenger</p>
+                <input type="password" id="pass-input" placeholder="Senha" class="w-full p-4 bg-gray-100 rounded-xl mb-4 text-center text-xl outline-none">
+                <input type="text" id="nick-input" placeholder="Seu Apelido" class="w-full p-4 bg-gray-100 rounded-xl mb-6 text-center outline-none">
+                <button onclick="attemptLogin()" class="w-full bg-teal-700 text-white font-bold py-4 rounded-xl shadow-lg transition-transform active:scale-95">ENTRAR</button>
+                <p id="status-text" class="text-[10px] mt-4 text-gray-400 italic">Conectando...</p>
             </div>
         </div>
 
-        <!-- Interface do Chat -->
+        <!-- Chat -->
         <div id="chat-app" class="hidden flex flex-col h-full">
-            <header class="bg-[#075e54] text-white p-4 flex justify-between items-center shadow-lg shrink-0">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 bg-teal-600 rounded-full flex items-center justify-center">
-                        <i class="fas fa-comments text-white"></i>
+            <header id="app-header" class="bg-[#075e54] text-white p-4 flex flex-col shadow-lg shrink-0 transition-colors duration-300">
+                <div class="flex justify-between items-center w-full">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-teal-600 rounded-full flex items-center justify-center shadow-inner">
+                            <i class="fas fa-paper-plane text-white"></i>
+                        </div>
+                        <div>
+                            <h1 class="font-bold leading-none text-md">Em Pauta</h1>
+                            <span id="display-nick" class="text-[9px] text-teal-200 uppercase font-semibold"></span>
+                        </div>
                     </div>
-                    <div>
-                        <h1 class="font-bold leading-none">Em Pauta</h1>
-                        <span id="display-nick" class="text-[10px] text-teal-200 uppercase tracking-widest"></span>
+                    <div class="flex gap-1">
+                        <button onclick="toggleDarkMode()" id="dark-btn" class="p-2 hover:bg-black/10 rounded-full"><i class="fas fa-moon"></i></button>
+                        <button onclick="toggleSearch()" class="p-2 hover:bg-black/10 rounded-full"><i class="fas fa-search"></i></button>
+                        <button onclick="clearScreen()" class="p-2 hover:bg-black/10 rounded-full"><i class="fas fa-broom"></i></button>
+                        <button onclick="logout()" class="p-2 hover:bg-black/10 rounded-full"><i class="fas fa-sign-out-alt"></i></button>
                     </div>
                 </div>
-                <div class="flex gap-4">
-                    <button onclick="clearScreen()" title="Limpar Minha Tela" class="p-2 hover:bg-teal-700 rounded-full transition"><i class="fas fa-broom"></i></button>
-                    <button onclick="logout()" title="Sair" class="p-2 hover:bg-teal-700 rounded-full transition"><i class="fas fa-sign-out-alt"></i></button>
+                <!-- Barra de Pesquisa -->
+                <div id="search-bar" class="hidden mt-3">
+                    <input type="text" id="search-input" oninput="render()" placeholder="Pesquisar mensagens..." 
+                           class="w-full p-2 rounded-lg bg-black/20 border-none outline-none text-sm placeholder:text-teal-200 text-white">
                 </div>
             </header>
 
             <main id="chat-box" class="chat-area">
-                <div class="text-center text-gray-400 text-[10px] my-4 uppercase tracking-widest">
-                    <i class="fas fa-lock mr-1"></i> Mensagens encriptadas
-                </div>
+                <!-- Conteúdo -->
             </main>
 
-            <footer class="bg-[#f0f0f0] shrink-0 border-t border-gray-200">
+            <footer class="shrink-0">
                 <div id="reply-bar" class="hidden bg-gray-200 p-2 border-l-4 border-teal-700 mx-4 mt-2 rounded-lg flex justify-between items-center">
                     <div class="px-2 overflow-hidden">
-                        <p class="text-[9px] font-bold text-teal-700 uppercase">A responder a</p>
+                        <p class="text-[9px] font-bold text-teal-700">RESPONDENDO A</p>
                         <p id="reply-preview-text" class="text-xs text-gray-600 truncate italic"></p>
                     </div>
-                    <button onclick="cancelReply()" class="text-red-500 p-2 font-bold text-xl">&times;</button>
+                    <button onclick="cancelReply()" class="text-red-500 p-2">&times;</button>
                 </div>
 
-                <div class="p-4 flex items-end gap-3">
-                    <div class="flex-1 bg-white rounded-2xl shadow-sm p-1 flex flex-col border border-gray-300">
-                        <textarea id="msg-input" placeholder="Escreva uma mensagem..." rows="1"
-                                  class="w-full p-3 outline-none resize-none max-h-32 text-sm bg-transparent"></textarea>
+                <div class="p-3 flex items-end gap-2">
+                    <div class="flex-1 bg-white dark:bg-gray-700 rounded-2xl shadow-sm p-1 flex flex-col border border-gray-200 dark:border-gray-600">
+                        <textarea id="msg-input" placeholder="Mensagem..." rows="1" class="w-full p-2 outline-none resize-none text-sm bg-transparent"></textarea>
                     </div>
                     <div class="flex flex-col gap-2">
-                        <button onclick="toggleEmojis()" class="w-10 h-10 bg-white text-gray-500 rounded-full shadow hover:text-teal-600 transition flex items-center justify-center">
+                        <button onclick="toggleEmojis()" class="w-10 h-10 bg-white dark:bg-gray-800 text-gray-400 rounded-full shadow flex items-center justify-center">
                             <i class="far fa-smile text-xl"></i>
                         </button>
-                        <button id="send-btn" onclick="doSendMessage()" class="w-12 h-12 bg-[#00a884] text-white rounded-full shadow-xl hover:bg-[#008f72] flex items-center justify-center transition-transform active:scale-90">
+                        <button onclick="doSendMessage()" class="w-12 h-12 bg-[#00a884] text-white rounded-full shadow-lg flex items-center justify-center transition-transform active:scale-90">
                             <i class="fas fa-paper-plane text-lg"></i>
                         </button>
                     </div>
                 </div>
 
-                <div id="emoji-box" class="hidden grid grid-cols-5 gap-2 pb-4 px-4 bg-[#f0f0f0]">
-                    <button onclick="insertEmoji('😊')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">😊</button>
-                    <button onclick="insertEmoji('😂')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">😂</button>
-                    <button onclick="insertEmoji('😮')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">😮</button>
-                    <button onclick="insertEmoji('😢')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">😢</button>
-                    <button onclick="insertEmoji('❤️')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">❤️</button>
-                    <button onclick="insertEmoji('👍')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">👍</button>
-                    <button onclick="insertEmoji('🙏')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">🙏</button>
-                    <button onclick="insertEmoji('🔥')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">🔥</button>
-                    <button onclick="insertEmoji('✅')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">✅</button>
-                    <button onclick="insertEmoji('⚠️')" class="text-2xl p-2 bg-white rounded-lg shadow-sm">⚠️</button>
+                <div id="emoji-box" class="hidden grid grid-cols-5 gap-2 pb-4 px-4">
+                    <button onclick="insertEmoji('😊')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm">😊</button>
+                    <button onclick="insertEmoji('😂')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm">😂</button>
+                    <button onclick="insertEmoji('😮')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm">😮</button>
+                    <button onclick="insertEmoji('😢')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm">😢</button>
+                    <button onclick="insertEmoji('❤️')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm">❤️</button>
+                    <button onclick="insertEmoji('👍')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm">👍</button>
+                    <button onclick="insertEmoji('🙏')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm">🙏</button>
+                    <button onclick="insertEmoji('🔥')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm">🔥</button>
+                    <button onclick="insertEmoji('✅')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm">✅</button>
+                    <button onclick="insertEmoji('⚠️')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm">⚠️</button>
                 </div>
             </footer>
         </div>
@@ -179,40 +167,50 @@
         const appIdSlug = "em-pauta-main"; 
 
         let currentUser = null;
-        let myNick = localStorage.getItem('empauta_nick_v3') || "";
+        let myNick = localStorage.getItem('empauta_nick_vfinal') || "";
         let replyTarget = null;
         let allMessages = [];
         let filterIndex = 0;
+        
+        // Som de Notificação (Base64 curto para ser leve)
+        const notificationSound = new Audio("https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3");
 
-        function showError(text) {
-            const errDiv = document.getElementById('error-msg');
-            const errText = document.getElementById('error-text');
-            errText.innerText = text;
-            errDiv.classList.remove('hidden');
-        }
+        // --- Funções de UI Modernas ---
+        window.toggleDarkMode = () => {
+            document.body.classList.toggle('dark');
+            const isDark = document.body.classList.contains('dark');
+            localStorage.setItem('empauta_theme', isDark ? 'dark' : 'light');
+            document.getElementById('dark-btn').innerHTML = isDark ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+            document.getElementById('app-header').style.backgroundColor = isDark ? '#202c33' : '#075e54';
+        };
+
+        window.toggleSearch = () => {
+            const bar = document.getElementById('search-bar');
+            bar.classList.toggle('hidden');
+            if(!bar.classList.contains('hidden')) document.getElementById('search-input').focus();
+        };
+
+        // Recuperar tema salvo
+        if(localStorage.getItem('empauta_theme') === 'dark') toggleDarkMode();
 
         onAuthStateChanged(auth, (user) => {
             currentUser = user;
             if (user) {
-                document.getElementById('status-text').innerText = "Ligado. Pode entrar.";
+                document.getElementById('status-text').innerText = "Pronto.";
                 if (myNick) startChatSession();
             }
         });
 
-        signInAnonymously(auth).catch(e => {
-            showError("A autenticação falhou! Ative o acesso 'Anónimo' no menu Authentication do Firebase.");
-        });
+        signInAnonymously(auth);
 
         window.attemptLogin = () => {
             const pass = document.getElementById('pass-input').value;
             const nick = document.getElementById('nick-input').value.trim();
             if (pass === "2407" && nick) {
                 myNick = nick;
-                localStorage.setItem('empauta_nick_v3', nick);
+                localStorage.setItem('empauta_nick_vfinal', nick);
                 startChatSession();
-            } else {
-                alert("Senha ou apelido inválidos.");
-            }
+            } else { alert("Verifique os dados."); }
         };
 
         const startChatSession = () => {
@@ -227,37 +225,49 @@
             onSnapshot(colRef, (snap) => {
                 const list = [];
                 snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+                
+                const oldLen = allMessages.length;
                 allMessages = list.sort((a,b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
-                render();
-                document.getElementById('error-msg').classList.add('hidden');
-            }, (err) => {
-                if (err.code === 'permission-denied') {
-                    showError("Erro de Permissão! Verifique se as Regras (Rules) foram publicadas no Firestore.");
+                
+                // Tocar som se houver nova mensagem de terceiros
+                if (allMessages.length > oldLen && oldLen > 0) {
+                    const ultima = allMessages[allMessages.length - 1];
+                    if (ultima.sender !== myNick) notificationSound.play();
                 }
+                
+                render();
             });
         };
 
-        const render = () => {
+        window.render = () => {
             const box = document.getElementById('chat-box');
+            const searchVal = document.getElementById('search-input').value.toLowerCase();
             box.innerHTML = "";
-            allMessages.slice(filterIndex).forEach(m => {
+            
+            const visible = allMessages.slice(filterIndex).filter(m => 
+                m.text.toLowerCase().includes(searchVal) || m.sender.toLowerCase().includes(searchVal)
+            );
+            
+            visible.forEach(m => {
                 const isMe = m.sender === myNick;
                 const div = document.createElement('div');
-                div.className = `bubble flex flex-col ${isMe ? 'my-msg' : 'other-msg'}`;
-                
+                div.className = `bubble ${isMe ? 'my-msg' : 'other-msg'}`;
                 div.ondblclick = () => {
                     replyTarget = { sender: m.sender, text: m.text };
                     document.getElementById('reply-preview-text').innerText = `${m.sender}: ${m.text}`;
                     document.getElementById('reply-bar').classList.remove('hidden');
                     document.getElementById('msg-input').focus();
                 };
+
+                let replyHtml = m.reply ? `<span class="reply-tag">${m.reply}</span>` : "";
+                
                 div.innerHTML = `
-                    <span class="text-[9px] font-bold text-teal-700 uppercase mb-1">${m.sender}</span>
-                    ${m.reply ? `<div class="reply-tag">${m.reply}</div>` : ""}
-                    <p class="text-sm text-gray-800 break-words whitespace-pre-wrap">${m.text}</p>
-                    <span class="text-[8px] text-gray-400 text-right mt-1">
+                    <div class="text-[9px] font-bold text-teal-800 uppercase mb-1 opacity-70">${m.sender}</div>
+                    ${replyHtml}
+                    <div class="text-sm text-gray-800 break-words whitespace-pre-wrap leading-tight">${m.text}</div>
+                    <div class="text-[8px] text-gray-400 text-right mt-1">
                         ${m.timestamp ? new Date(m.timestamp.seconds * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '...'}
-                    </span>
+                    </div>
                 `;
                 box.appendChild(div);
             });
@@ -269,36 +279,26 @@
             const text = input.value.trim();
             if (!text || !currentUser) return;
             const payload = {
-                sender: myNick,
-                text: text,
+                sender: myNick, text: text,
                 reply: replyTarget ? `${replyTarget.sender}: ${replyTarget.text}` : null,
-                timestamp: serverTimestamp(),
-                uid: currentUser.uid
+                timestamp: serverTimestamp(), uid: currentUser.uid
             };
-            input.value = "";
-            input.style.height = "auto";
-            window.cancelReply();
-            try {
-                const colRef = collection(db, 'artifacts', appIdSlug, 'public', 'data', 'messages');
-                await addDoc(colRef, payload);
-            } catch (e) { showError("Erro ao enviar! Verifique as regras de escrita."); }
+            input.value = ""; input.style.height = "auto"; window.cancelReply();
+            try { await addDoc(collection(db, 'artifacts', appIdSlug, 'public', 'data', 'messages'), payload); } catch (e) {}
         };
 
-        window.logout = () => { localStorage.removeItem('empauta_nick_v3'); location.reload(); };
+        window.logout = () => { localStorage.removeItem('empauta_nick_vfinal'); location.reload(); };
         window.clearScreen = () => { filterIndex = allMessages.length; render(); };
         window.cancelReply = () => { replyTarget = null; document.getElementById('reply-bar').classList.add('hidden'); };
         window.toggleEmojis = () => document.getElementById('emoji-box').classList.toggle('hidden');
         window.insertEmoji = (e) => { 
             const input = document.getElementById('msg-input');
-            input.value += e; 
-            document.getElementById('emoji-box').classList.add('hidden'); 
-            input.focus(); 
+            input.value += e; document.getElementById('emoji-box').classList.add('hidden'); input.focus(); 
         };
 
         document.getElementById('msg-input').addEventListener('input', function() {
             this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px';
         });
-
         document.getElementById('msg-input').addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); window.doSendMessage(); }
         });
