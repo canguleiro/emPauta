@@ -12,13 +12,37 @@
         /* Transição suave para Modo Escuro */
         body.dark { --app-bg: #0b141a; --header-bg: #202c33; background-color: #0b141a !important; }
         
-        body { background-color: #d1d7db; font-family: 'Segoe UI', sans-serif; transition: background 0.3s ease; }
+        /* Centralização total no PC */
+        body { 
+            background-color: #d1d7db; 
+            font-family: 'Segoe UI', sans-serif; 
+            transition: background 0.3s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
         
         .main-app-container {
-            width: 100%; max-width: 500px; height: 100vh;
+            width: 100%; 
+            max-width: 500px; 
+            height: 100vh;
             background-color: var(--app-bg);
-            position: relative; box-shadow: 0 0 30px rgba(0,0,0,0.2);
-            display: flex; flex-direction: column; transition: background 0.3s ease;
+            position: relative; 
+            box-shadow: 0 0 30px rgba(0,0,0,0.2);
+            display: flex; 
+            flex-direction: column; 
+            transition: background 0.3s ease;
+        }
+
+        /* No PC, damos um pouco de margem vertical para parecer um app */
+        @media (min-width: 768px) {
+            .main-app-container {
+                height: 95vh;
+                border-radius: 10px;
+            }
         }
 
         .chat-area { 
@@ -29,7 +53,7 @@
         /* Balões Estilizados */
         .bubble { 
             max-width: 85%; border-radius: 12px; position: relative; 
-            animation: fadeIn 0.2s ease; cursor: pointer; padding: 10px 14px; 
+            animation: fadeIn 0.2s ease; cursor: pointer; padding: 8px 12px; 
             box-shadow: 0 1px 1px rgba(0,0,0,0.1); 
         }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
@@ -54,12 +78,19 @@
             position: absolute; inset: 0; z-index: 50;
             background: linear-gradient(135deg, #075e54 0%, #128c7e 100%); 
             display: flex; align-items: center; justify-content: center; padding: 1.5rem;
+            border-radius: inherit;
         }
         
         .hidden { display: none !important; }
         footer { background-color: #f0f0f0; border-top: 1px solid #e0e0e0; }
         body.dark footer { background-color: #202c33; border-top: 1px solid #2f3b37; }
         body.dark textarea { background: #2a3942; color: white; }
+
+        /* Estilo para mídias */
+        .msg-image { border-radius: 8px; max-width: 100%; margin-top: 5px; cursor: zoom-in; }
+        .msg-audio { width: 100%; margin-top: 5px; height: 35px; }
+        .loading-spinner { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -70,10 +101,10 @@
             <div class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-[340px] text-center">
                 <h1 class="text-3xl font-bold text-teal-800 mb-1">Em Pauta</h1>
                 <p class="text-gray-400 text-sm mb-6 uppercase tracking-widest text-[10px]">Cloud Messenger</p>
-                <input type="password" id="pass-input" placeholder="Senha" class="w-full p-4 bg-gray-100 rounded-xl mb-4 text-center text-xl outline-none">
-                <input type="text" id="nick-input" placeholder="Seu Apelido" class="w-full p-4 bg-gray-100 rounded-xl mb-6 text-center outline-none">
-                <button onclick="attemptLogin()" class="w-full bg-teal-700 text-white font-bold py-4 rounded-xl shadow-lg transition-transform active:scale-95">ENTRAR</button>
-                <p id="status-text" class="text-[10px] mt-4 text-gray-400 italic">Conectando...</p>
+                <input type="password" id="pass-input" placeholder="Senha" class="w-full p-4 bg-gray-100 rounded-xl mb-4 text-center text-xl outline-none border border-transparent focus:border-teal-500">
+                <input type="text" id="nick-input" placeholder="Seu Apelido" class="w-full p-4 bg-gray-100 rounded-xl mb-6 text-center outline-none border border-transparent focus:border-teal-500">
+                <button onclick="attemptLogin()" class="w-full bg-teal-700 text-white font-bold py-4 rounded-xl shadow-lg transition-transform active:scale-95 hover:bg-teal-800">ENTRAR</button>
+                <p id="status-text" class="text-[10px] mt-4 text-gray-400 italic">Conectando ao banco de dados...</p>
             </div>
         </div>
 
@@ -83,7 +114,7 @@
                 <div class="flex justify-between items-center w-full">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 bg-teal-600 rounded-full flex items-center justify-center shadow-inner">
-                            <i class="fas fa-paper-plane text-white"></i>
+                            <i class="fas fa-paper-plane text-white text-sm"></i>
                         </div>
                         <div>
                             <h1 class="font-bold leading-none text-md">Em Pauta</h1>
@@ -91,57 +122,76 @@
                         </div>
                     </div>
                     <div class="flex gap-1">
-                        <button onclick="toggleDarkMode()" id="dark-btn" class="p-2 hover:bg-black/10 rounded-full"><i class="fas fa-moon"></i></button>
-                        <button onclick="toggleSearch()" class="p-2 hover:bg-black/10 rounded-full"><i class="fas fa-search"></i></button>
-                        <button onclick="clearScreen()" class="p-2 hover:bg-black/10 rounded-full"><i class="fas fa-broom"></i></button>
-                        <button onclick="logout()" class="p-2 hover:bg-black/10 rounded-full"><i class="fas fa-sign-out-alt"></i></button>
+                        <button onclick="toggleDarkMode()" id="dark-btn" class="p-2 hover:bg-black/10 rounded-full transition"><i class="fas fa-moon"></i></button>
+                        <button onclick="toggleSearch()" class="p-2 hover:bg-black/10 rounded-full transition"><i class="fas fa-search"></i></button>
+                        <button onclick="clearScreen()" title="Limpar visualização" class="p-2 hover:bg-black/10 rounded-full transition"><i class="fas fa-broom"></i></button>
+                        <button onclick="logout()" class="p-2 hover:bg-black/10 rounded-full transition text-red-300"><i class="fas fa-sign-out-alt"></i></button>
                     </div>
                 </div>
                 <!-- Barra de Pesquisa -->
                 <div id="search-bar" class="hidden mt-3">
-                    <input type="text" id="search-input" oninput="render()" placeholder="Pesquisar mensagens..." 
-                           class="w-full p-2 rounded-lg bg-black/20 border-none outline-none text-sm placeholder:text-teal-200 text-white">
+                    <input type="text" id="search-input" oninput="render()" placeholder="Filtrar mensagens..." 
+                           class="w-full p-2 rounded-lg bg-black/20 border-none outline-none text-sm placeholder:text-teal-200 text-white focus:bg-black/30 transition-all">
                 </div>
             </header>
 
             <main id="chat-box" class="chat-area">
-                <!-- Conteúdo -->
+                <!-- Conteúdo carregado via JS -->
             </main>
 
             <footer class="shrink-0">
-                <div id="reply-bar" class="hidden bg-gray-200 p-2 border-l-4 border-teal-700 mx-4 mt-2 rounded-lg flex justify-between items-center">
+                <div id="reply-bar" class="hidden bg-gray-200 p-2 border-l-4 border-teal-700 mx-4 mt-2 rounded-lg flex justify-between items-center animate-pulse">
                     <div class="px-2 overflow-hidden">
-                        <p class="text-[9px] font-bold text-teal-700">RESPONDENDO A</p>
+                        <p class="text-[9px] font-bold text-teal-700 uppercase">Respondendo a</p>
                         <p id="reply-preview-text" class="text-xs text-gray-600 truncate italic"></p>
                     </div>
                     <button onclick="cancelReply()" class="text-red-500 p-2">&times;</button>
                 </div>
 
                 <div class="p-3 flex items-end gap-2">
-                    <div class="flex-1 bg-white dark:bg-gray-700 rounded-2xl shadow-sm p-1 flex flex-col border border-gray-200 dark:border-gray-600">
-                        <textarea id="msg-input" placeholder="Mensagem..." rows="1" class="w-full p-2 outline-none resize-none text-sm bg-transparent"></textarea>
-                    </div>
                     <div class="flex flex-col gap-2">
-                        <button onclick="toggleEmojis()" class="w-10 h-10 bg-white dark:bg-gray-800 text-gray-400 rounded-full shadow flex items-center justify-center">
+                        <input type="file" id="file-input" class="hidden" accept="image/*,audio/*" onchange="handleFileSelect(this)">
+                        <button onclick="document.getElementById('file-input').click()" class="w-10 h-10 bg-white dark:bg-gray-800 text-teal-600 rounded-full shadow flex items-center justify-center hover:scale-105 transition">
+                            <i class="fas fa-paperclip text-lg"></i>
+                        </button>
+                    </div>
+
+                    <div class="flex-1 bg-white dark:bg-gray-700 rounded-2xl shadow-sm p-1 flex flex-col border border-gray-200 dark:border-gray-600">
+                        <textarea id="msg-input" placeholder="Escreva aqui..." rows="1" class="w-full p-2 outline-none resize-none text-sm bg-transparent"></textarea>
+                    </div>
+                    
+                    <div class="flex flex-col gap-2">
+                        <button onclick="toggleEmojis()" class="w-10 h-10 bg-white dark:bg-gray-800 text-gray-400 rounded-full shadow flex items-center justify-center hover:text-teal-600 transition">
                             <i class="far fa-smile text-xl"></i>
                         </button>
-                        <button onclick="doSendMessage()" class="w-12 h-12 bg-[#00a884] text-white rounded-full shadow-lg flex items-center justify-center transition-transform active:scale-90">
+                        <button id="send-btn" onclick="doSendMessage()" class="w-12 h-12 bg-[#00a884] text-white rounded-full shadow-lg flex items-center justify-center transition-transform active:scale-90 hover:bg-[#008f72]">
                             <i class="fas fa-paper-plane text-lg"></i>
                         </button>
                     </div>
                 </div>
 
+                <!-- Preview de arquivo selecionado -->
+                <div id="file-preview" class="hidden px-4 pb-4">
+                    <div class="bg-teal-50 dark:bg-teal-900/30 p-2 rounded-lg flex items-center justify-between border border-teal-200">
+                        <div class="flex items-center gap-2">
+                            <i id="file-icon" class="fas fa-file"></i>
+                            <span id="file-name" class="text-xs truncate max-w-[200px] font-semibold">arquivo.ext</span>
+                        </div>
+                        <button onclick="clearFileSelection()" class="text-red-500"><i class="fas fa-times-circle"></i></button>
+                    </div>
+                </div>
+
                 <div id="emoji-box" class="hidden grid grid-cols-5 gap-2 pb-4 px-4">
-                    <button onclick="insertEmoji('😊')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm">😊</button>
-                    <button onclick="insertEmoji('😂')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm">😂</button>
-                    <button onclick="insertEmoji('😮')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm">😮</button>
-                    <button onclick="insertEmoji('😢')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm">😢</button>
-                    <button onclick="insertEmoji('❤️')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm">❤️</button>
-                    <button onclick="insertEmoji('👍')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm">👍</button>
-                    <button onclick="insertEmoji('🙏')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm">🙏</button>
-                    <button onclick="insertEmoji('🔥')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm">🔥</button>
-                    <button onclick="insertEmoji('✅')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm">✅</button>
-                    <button onclick="insertEmoji('⚠️')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm">⚠️</button>
+                    <button onclick="insertEmoji('😊')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:bg-gray-50 transition">😊</button>
+                    <button onclick="insertEmoji('😂')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:bg-gray-50 transition">😂</button>
+                    <button onclick="insertEmoji('😮')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:bg-gray-50 transition">😮</button>
+                    <button onclick="insertEmoji('😢')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:bg-gray-50 transition">😢</button>
+                    <button onclick="insertEmoji('❤️')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:bg-gray-50 transition">❤️</button>
+                    <button onclick="insertEmoji('👍')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:bg-gray-50 transition">👍</button>
+                    <button onclick="insertEmoji('🙏')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:bg-gray-50 transition">🙏</button>
+                    <button onclick="insertEmoji('🔥')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:bg-gray-50 transition">🔥</button>
+                    <button onclick="insertEmoji('✅')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:bg-gray-50 transition">✅</button>
+                    <button onclick="insertEmoji('⚠️')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:bg-gray-50 transition">⚠️</button>
                 </div>
             </footer>
         </div>
@@ -171,11 +221,43 @@
         let replyTarget = null;
         let allMessages = [];
         let filterIndex = 0;
+        let selectedFileBase64 = null;
+        let selectedFileType = null;
         
-        // Som de Notificação (Base64 curto para ser leve)
         const notificationSound = new Audio("https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3");
 
-        // --- Funções de UI Modernas ---
+        // --- Funções de Mídia ---
+        window.handleFileSelect = (input) => {
+            const file = input.files[0];
+            if (!file) return;
+
+            // Limite de 800KB para caber no documento Firestore (limite total é 1MB)
+            if (file.size > 800000) {
+                alert("O arquivo é muito grande! Escolha algo menor que 800KB.");
+                input.value = "";
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                selectedFileBase64 = e.target.result;
+                selectedFileType = file.type.startsWith('image') ? 'image' : 'audio';
+                
+                document.getElementById('file-name').innerText = file.name;
+                document.getElementById('file-icon').className = selectedFileType === 'image' ? 'fas fa-image' : 'fas fa-microphone';
+                document.getElementById('file-preview').classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+        };
+
+        window.clearFileSelection = () => {
+            selectedFileBase64 = null;
+            selectedFileType = null;
+            document.getElementById('file-input').value = "";
+            document.getElementById('file-preview').classList.add('hidden');
+        };
+
+        // --- Funções de UI ---
         window.toggleDarkMode = () => {
             document.body.classList.toggle('dark');
             const isDark = document.body.classList.contains('dark');
@@ -190,13 +272,12 @@
             if(!bar.classList.contains('hidden')) document.getElementById('search-input').focus();
         };
 
-        // Recuperar tema salvo
         if(localStorage.getItem('empauta_theme') === 'dark') toggleDarkMode();
 
         onAuthStateChanged(auth, (user) => {
             currentUser = user;
             if (user) {
-                document.getElementById('status-text').innerText = "Pronto.";
+                document.getElementById('status-text').innerText = "Ligação estável.";
                 if (myNick) startChatSession();
             }
         });
@@ -210,7 +291,7 @@
                 myNick = nick;
                 localStorage.setItem('empauta_nick_vfinal', nick);
                 startChatSession();
-            } else { alert("Verifique os dados."); }
+            } else { alert("Senha incorreta ou apelido ausente."); }
         };
 
         const startChatSession = () => {
@@ -229,10 +310,9 @@
                 const oldLen = allMessages.length;
                 allMessages = list.sort((a,b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
                 
-                // Tocar som se houver nova mensagem de terceiros
                 if (allMessages.length > oldLen && oldLen > 0) {
                     const ultima = allMessages[allMessages.length - 1];
-                    if (ultima.sender !== myNick) notificationSound.play();
+                    if (ultima.sender !== myNick) notificationSound.play().catch(() => {});
                 }
                 
                 render();
@@ -245,26 +325,36 @@
             box.innerHTML = "";
             
             const visible = allMessages.slice(filterIndex).filter(m => 
-                m.text.toLowerCase().includes(searchVal) || m.sender.toLowerCase().includes(searchVal)
+                (m.text || "").toLowerCase().includes(searchVal) || m.sender.toLowerCase().includes(searchVal)
             );
             
             visible.forEach(m => {
                 const isMe = m.sender === myNick;
                 const div = document.createElement('div');
                 div.className = `bubble ${isMe ? 'my-msg' : 'other-msg'}`;
+                
                 div.ondblclick = () => {
-                    replyTarget = { sender: m.sender, text: m.text };
-                    document.getElementById('reply-preview-text').innerText = `${m.sender}: ${m.text}`;
+                    replyTarget = { sender: m.sender, text: m.text || "[Mídia]" };
+                    document.getElementById('reply-preview-text').innerText = `${m.sender}: ${replyTarget.text}`;
                     document.getElementById('reply-bar').classList.remove('hidden');
                     document.getElementById('msg-input').focus();
                 };
 
                 let replyHtml = m.reply ? `<span class="reply-tag">${m.reply}</span>` : "";
                 
+                // Gerar conteúdo de mídia se houver
+                let mediaHtml = "";
+                if (m.fileType === 'image') {
+                    mediaHtml = `<img src="${m.fileData}" class="msg-image" onclick="window.open(this.src)" />`;
+                } else if (m.fileType === 'audio') {
+                    mediaHtml = `<audio controls class="msg-audio"><source src="${m.fileData}" type="audio/mpeg"></audio>`;
+                }
+                
                 div.innerHTML = `
                     <div class="text-[9px] font-bold text-teal-800 uppercase mb-1 opacity-70">${m.sender}</div>
                     ${replyHtml}
-                    <div class="text-sm text-gray-800 break-words whitespace-pre-wrap leading-tight">${m.text}</div>
+                    ${mediaHtml}
+                    <div class="text-sm text-gray-800 dark:text-gray-200 break-words whitespace-pre-wrap leading-tight">${m.text || ""}</div>
                     <div class="text-[8px] text-gray-400 text-right mt-1">
                         ${m.timestamp ? new Date(m.timestamp.seconds * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '...'}
                     </div>
@@ -277,14 +367,34 @@
         window.doSendMessage = async () => {
             const input = document.getElementById('msg-input');
             const text = input.value.trim();
-            if (!text || !currentUser) return;
+            if (!text && !selectedFileBase64 || !currentUser) return;
+
+            const sendBtn = document.getElementById('send-btn');
+            sendBtn.innerHTML = '<i class="fas fa-circle-notch loading-spinner"></i>';
+            sendBtn.disabled = true;
+
             const payload = {
-                sender: myNick, text: text,
+                sender: myNick, 
+                text: text,
                 reply: replyTarget ? `${replyTarget.sender}: ${replyTarget.text}` : null,
-                timestamp: serverTimestamp(), uid: currentUser.uid
+                fileData: selectedFileBase64,
+                fileType: selectedFileType,
+                timestamp: serverTimestamp(), 
+                uid: currentUser.uid
             };
-            input.value = ""; input.style.height = "auto"; window.cancelReply();
-            try { await addDoc(collection(db, 'artifacts', appIdSlug, 'public', 'data', 'messages'), payload); } catch (e) {}
+
+            try { 
+                await addDoc(collection(db, 'artifacts', appIdSlug, 'public', 'data', 'messages'), payload); 
+                input.value = ""; 
+                input.style.height = "auto"; 
+                window.cancelReply();
+                window.clearFileSelection();
+            } catch (e) {
+                alert("Erro ao enviar mensagem.");
+            } finally {
+                sendBtn.innerHTML = '<i class="fas fa-paper-plane text-lg"></i>';
+                sendBtn.disabled = false;
+            }
         };
 
         window.logout = () => { localStorage.removeItem('empauta_nick_vfinal'); location.reload(); };
