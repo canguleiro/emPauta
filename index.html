@@ -143,7 +143,7 @@
                 <span>Formatar</span>
                 <span>Exibir</span>
                 <span>Ajuda</span>
-                <!-- Botão discreto para voltar ao chat -->
+                <!-- Botão discreto para voltar ao chat (exige senha) -->
                 <span onclick="togglePanicMode()" style="cursor: pointer; opacity: 0.5;"><i class="fas fa-cog"></i></span>
             </div>
             <textarea class="notepad-content" placeholder="Anotações da reunião de hoje..."></textarea>
@@ -270,6 +270,8 @@
         const db = getFirestore(app);
         const appIdSlug = "em-pauta-main"; 
 
+        const MASTER_PASS = "2407";
+
         let currentUser = null;
         let myNick = localStorage.getItem('empauta_nick_vfinal') || "";
         let replyTarget = null;
@@ -313,10 +315,20 @@
         // --- Funções de UI ---
         window.togglePanicMode = () => {
             const panic = document.getElementById('panic-screen');
-            panic.classList.toggle('hidden');
-            // Se estiver ativo, garante que o teclado foque na área de texto falsa
-            if(!panic.classList.contains('hidden')) {
+            const isEntering = panic.classList.contains('hidden');
+
+            if (isEntering) {
+                // Entrando no modo pânico
+                panic.classList.remove('hidden');
                 document.querySelector('.notepad-content').focus();
+            } else {
+                // Saindo do modo pânico - exige senha
+                const pass = prompt("Sistema Restrito. Digite a senha para restaurar:");
+                if (pass === MASTER_PASS) {
+                    panic.classList.add('hidden');
+                } else if (pass !== null) {
+                    // Password box customizada não necessária aqui, apenas ignoramos se errar
+                }
             }
         };
 
@@ -349,7 +361,7 @@
         window.attemptLogin = () => {
             const pass = document.getElementById('pass-input').value;
             const nick = document.getElementById('nick-input').value.trim();
-            if (pass === "2407" && nick) {
+            if (pass === MASTER_PASS && nick) {
                 myNick = nick;
                 localStorage.setItem('empauta_nick_vfinal', nick);
                 startChatSession();
@@ -375,7 +387,6 @@
                 if (allMessages.length > oldLen && oldLen > 0) {
                     const ultima = allMessages[allMessages.length - 1];
                     if (ultima.sender !== myNick) {
-                        // Não toca som se o modo pânico estiver ativo para não denunciar
                         if(document.getElementById('panic-screen').classList.contains('hidden')) {
                             notificationSound.play().catch(() => {});
                         }
@@ -455,7 +466,7 @@
                 window.cancelReply();
                 window.clearFileSelection();
             } catch (e) {
-                alert("Erro ao enviar mensagem.");
+                // Erro silencioso
             } finally {
                 sendBtn.innerHTML = '<i class="fas fa-paper-plane text-lg"></i>';
                 sendBtn.disabled = false;
