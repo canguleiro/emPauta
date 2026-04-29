@@ -91,11 +91,64 @@
         .msg-audio { width: 100%; margin-top: 5px; height: 35px; }
         .loading-spinner { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        /* --- ESTILO MODO PÂNICO (Bloco de Notas) --- */
+        #panic-screen {
+            position: absolute;
+            inset: 0;
+            z-index: 100;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-radius: inherit;
+        }
+        .notepad-header {
+            background: #f0f0f0;
+            padding: 2px 10px;
+            font-size: 12px;
+            border-bottom: 1px solid #ccc;
+            color: #333;
+            display: flex;
+            gap: 15px;
+        }
+        .notepad-title {
+            background: #fff;
+            padding: 4px 10px;
+            font-size: 11px;
+            color: #666;
+            border-bottom: 1px solid #eee;
+        }
+        .notepad-content {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            outline: none;
+            resize: none;
+            font-size: 14px;
+            line-height: 1.5;
+            color: #000;
+        }
     </style>
 </head>
 <body>
 
     <div class="main-app-container">
+        <!-- Modo Pânico (Invisível por padrão) -->
+        <div id="panic-screen" class="hidden">
+            <div class="notepad-title">Sem título - Bloco de Notas</div>
+            <div class="notepad-header">
+                <span>Arquivo</span>
+                <span>Editar</span>
+                <span>Formatar</span>
+                <span>Exibir</span>
+                <span>Ajuda</span>
+                <!-- Botão discreto para voltar ao chat -->
+                <span onclick="togglePanicMode()" style="cursor: pointer; opacity: 0.5;"><i class="fas fa-cog"></i></span>
+            </div>
+            <textarea class="notepad-content" placeholder="Anotações da reunião de hoje..."></textarea>
+        </div>
+
         <!-- Login -->
         <div id="login-screen">
             <div class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-[340px] text-center">
@@ -122,6 +175,7 @@
                         </div>
                     </div>
                     <div class="flex gap-1">
+                        <button onclick="togglePanicMode()" title="Modo Segurança" class="p-2 hover:bg-black/10 rounded-full transition text-yellow-300"><i class="fas fa-shield-alt"></i></button>
                         <button onclick="toggleDarkMode()" id="dark-btn" class="p-2 hover:bg-black/10 rounded-full transition"><i class="fas fa-moon"></i></button>
                         <button onclick="toggleSearch()" class="p-2 hover:bg-black/10 rounded-full transition"><i class="fas fa-search"></i></button>
                         <button onclick="clearScreen()" title="Limpar visualização" class="p-2 hover:bg-black/10 rounded-full transition"><i class="fas fa-broom"></i></button>
@@ -231,7 +285,6 @@
             const file = input.files[0];
             if (!file) return;
 
-            // Limite de 800KB para caber no documento Firestore (limite total é 1MB)
             if (file.size > 800000) {
                 alert("O arquivo é muito grande! Escolha algo menor que 800KB.");
                 input.value = "";
@@ -258,6 +311,15 @@
         };
 
         // --- Funções de UI ---
+        window.togglePanicMode = () => {
+            const panic = document.getElementById('panic-screen');
+            panic.classList.toggle('hidden');
+            // Se estiver ativo, garante que o teclado foque na área de texto falsa
+            if(!panic.classList.contains('hidden')) {
+                document.querySelector('.notepad-content').focus();
+            }
+        };
+
         window.toggleDarkMode = () => {
             document.body.classList.toggle('dark');
             const isDark = document.body.classList.contains('dark');
@@ -312,7 +374,12 @@
                 
                 if (allMessages.length > oldLen && oldLen > 0) {
                     const ultima = allMessages[allMessages.length - 1];
-                    if (ultima.sender !== myNick) notificationSound.play().catch(() => {});
+                    if (ultima.sender !== myNick) {
+                        // Não toca som se o modo pânico estiver ativo para não denunciar
+                        if(document.getElementById('panic-screen').classList.contains('hidden')) {
+                            notificationSound.play().catch(() => {});
+                        }
+                    }
                 }
                 
                 render();
@@ -341,8 +408,6 @@
                 };
 
                 let replyHtml = m.reply ? `<span class="reply-tag">${m.reply}</span>` : "";
-                
-                // Gerar conteúdo de mídia se houver
                 let mediaHtml = "";
                 if (m.fileType === 'image') {
                     mediaHtml = `<img src="${m.fileData}" class="msg-image" onclick="window.open(this.src)" />`;
