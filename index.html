@@ -96,7 +96,7 @@
         .notepad-title { background: #fff; padding: 4px 10px; font-size: 11px; color: #666; border-bottom: 1px solid #eee; }
         .notepad-content { flex: 1; padding: 10px; border: none; outline: none; resize: none; font-size: 14px; color: #000; }
 
-        /* Estilos do Dropdown de Mensagem - CORRIGIDO */
+        /* Estilos do Dropdown de Mensagem */
         .msg-menu-btn {
             position: absolute;
             top: 2px;
@@ -124,7 +124,6 @@
             border: 1px solid #eee;
             top: 22px;
         }
-        /* Alinhamentos do menu baseados no lado da mensagem */
         .menu-right { right: 0; }
         .menu-left { left: 0; }
 
@@ -151,32 +150,27 @@
         /* Reações */
         .reactions-container {
             display: flex;
-            flex-wrap: wrap;
-            gap: 4px;
-            margin-top: 4px;
+            flex-wrap: wrap; gap: 4px; margin-top: 4px;
         }
         .reaction-badge {
-            background: rgba(0,0,0,0.05);
-            border: 1px solid rgba(0,0,0,0.1);
-            border-radius: 10px;
-            padding: 1px 6px;
-            font-size: 11px;
-            display: flex;
-            align-items: center;
-            gap: 3px;
+            background: rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.1);
+            border-radius: 10px; padding: 1px 6px; font-size: 11px;
+            display: flex; align-items: center; gap: 3px;
         }
         body.dark .reaction-badge { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.1); }
 
         .react-tray {
-            display: flex;
-            padding: 8px;
-            gap: 10px;
-            border-bottom: 1px solid #eee;
-            justify-content: center;
+            display: flex; padding: 8px; gap: 10px;
+            border-bottom: 1px solid #eee; justify-content: center;
         }
         body.dark .react-tray { border-color: #3b4a54; }
         .react-tray span { font-size: 18px; transition: transform 0.2s; cursor: pointer; }
         .react-tray span:hover { transform: scale(1.4); }
+
+        /* Indicadores de Leitura */
+        .read-status { font-size: 10px; margin-left: 4px; }
+        .read-status.read { color: #34b7f1; }
+        .read-status.sent { color: #8696a0; }
 
         #emoji-box { max-height: 200px; overflow-y: auto; border-top: 1px solid rgba(0,0,0,0.1); }
     </style>
@@ -289,7 +283,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyASQkgnQkeKjXKrmT3yMV9zcUVxec3NvrA",
@@ -361,6 +355,7 @@
 
         window.addEventListener('focus', () => {
             if (alertInterval) { clearInterval(alertInterval); alertInterval = null; document.title = originalTitle; }
+            markVisibleAsRead();
         });
 
         window.handleFileSelect = (input) => {
@@ -430,6 +425,19 @@
             }
         };
 
+        const markVisibleAsRead = async () => {
+            if (!currentUser || document.hidden) return;
+            
+            allMessages.forEach(async (m) => {
+                if (m.uid !== currentUser.uid && (!m.seenBy || !m.seenBy.includes(currentUser.uid))) {
+                    const msgRef = doc(db, 'artifacts', appIdSlug, 'public', 'data', 'messages', m.id);
+                    await updateDoc(msgRef, {
+                        seenBy: arrayUnion(currentUser.uid)
+                    });
+                }
+            });
+        };
+
         window.togglePanicMode = () => {
             const panic = document.getElementById('panic-screen');
             if (panic.classList.contains('hidden')) {
@@ -493,11 +501,14 @@
                 snap.forEach(d => list.push({ id: d.id, ...d.data() }));
                 const oldLen = allMessages.length;
                 allMessages = list.sort((a,b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
+                
                 if (allMessages.length > oldLen && oldLen > 0) {
                     const last = allMessages[allMessages.length - 1];
                     if (last.sender !== myNick) triggerAlerts(last.sender, last.text || "[Arquivo]");
                 }
+                
                 render();
+                markVisibleAsRead();
             });
         };
 
@@ -512,7 +523,6 @@
                 const div = document.createElement('div');
                 div.className = `bubble group ${isMe ? 'my-msg' : 'other-msg'}`;
                 
-                // Determina alinhamento do menu baseado no lado da mensagem
                 const menuClass = isMe ? 'menu-right' : 'menu-left';
 
                 let menuBtn = `
@@ -528,10 +538,8 @@
                         </div>
                         <button onclick="startReply('${m.id}')"><i class="fas fa-reply fa-xs"></i> Responder</button>
                         <button onclick="copyMsg('${m.text}')"><i class="fas fa-copy fa-xs"></i> Copiar</button>
-                        ${isMe ? `
-                            <button onclick="editMsg('${m.id}', '${m.text}')" class="text-blue-500"><i class="fas fa-edit fa-xs"></i> Editar</button>
-                            <button onclick="deleteMsg('${m.id}')" class="text-red-500"><i class="fas fa-trash fa-xs"></i> Excluir</button>
-                        ` : ''}
+                        ${isMe ? `<button onclick="editMsg('${m.id}', '${m.text}')" class="text-blue-500"><i class="fas fa-edit fa-xs"></i> Editar</button>` : ''}
+                        <button onclick="deleteMsg('${m.id}')" class="text-red-500"><i class="fas fa-trash fa-xs"></i> Excluir</button>
                     </div>
                 `;
 
@@ -540,6 +548,15 @@
                     reactionsHtml = `<div class="reactions-container">` + 
                         Object.entries(m.reactions).map(([emoji, count]) => `<div class="reaction-badge">${emoji} ${count}</div>`).join('') + 
                     `</div>`;
+                }
+
+                // Sistema de Checkmarks (Visto)
+                let statusHtml = "";
+                if (isMe) {
+                    const isRead = m.seenBy && m.seenBy.length > 0;
+                    statusHtml = `<span class="read-status ${isRead ? 'read' : 'sent'}">
+                        <i class="fas ${isRead ? 'fa-check-double' : 'fa-check'}"></i>
+                    </span>`;
                 }
 
                 let replyHtml = m.reply ? `<span class="reply-tag">${m.reply}</span>` : "";
@@ -551,7 +568,10 @@
                     ${replyHtml}${mediaHtml}
                     <div class="text-sm text-gray-800 dark:text-gray-200 break-words whitespace-pre-wrap leading-tight">${m.text || ""}</div>
                     ${reactionsHtml}
-                    <div class="text-[8px] text-gray-400 text-right mt-1">${m.timestamp ? new Date(m.timestamp.seconds * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '...'}</div>
+                    <div class="text-[8px] text-gray-400 text-right mt-1 flex items-center justify-end">
+                        ${m.timestamp ? new Date(m.timestamp.seconds * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '...'}
+                        ${statusHtml}
+                    </div>
                 `;
                 box.appendChild(div);
             });
@@ -565,7 +585,8 @@
                 sender: myNick, text: input.value.trim(),
                 reply: replyTarget ? `${replyTarget.sender}: ${replyTarget.text}` : null,
                 fileData: selectedFileBase64, fileType: selectedFileType,
-                timestamp: serverTimestamp(), uid: currentUser.uid, reactions: {}
+                timestamp: serverTimestamp(), uid: currentUser.uid, reactions: {},
+                seenBy: []
             };
             try { 
                 await addDoc(collection(db, 'artifacts', appIdSlug, 'public', 'data', 'messages'), payload); 
