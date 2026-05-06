@@ -82,7 +82,7 @@
         body.dark footer { background-color: #202c33; border-top: 1px solid #2f3b37; }
         body.dark textarea { background: #2a3942; color: white; }
 
-        .msg-image { border-radius: 8px; max-width: 100%; margin-top: 5px; cursor: zoom-in; }
+        .msg-image { border-radius: 8px; max-width: 100%; margin-top: 5px; cursor: zoom-in; min-height: 50px; background: #eee; }
         .msg-audio { width: 100%; margin-top: 5px; height: 35px; }
         .loading-spinner { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -96,7 +96,6 @@
         .notepad-title { background: #fff; padding: 4px 10px; font-size: 11px; color: #666; border-bottom: 1px solid #eee; }
         .notepad-content { flex: 1; padding: 10px; border: none; outline: none; resize: none; font-size: 14px; color: #000; }
 
-        /* Estilos do Dropdown de Mensagem */
         .msg-menu-btn {
             position: absolute;
             top: 2px;
@@ -147,7 +146,6 @@
         .msg-dropdown button:hover { background: #f5f5f5; }
         body.dark .msg-dropdown button:hover { background: #182229; }
 
-        /* Reações */
         .reactions-container {
             display: flex;
             flex-wrap: wrap; gap: 4px; margin-top: 4px;
@@ -167,7 +165,6 @@
         .react-tray span { font-size: 18px; transition: transform 0.2s; cursor: pointer; }
         .react-tray span:hover { transform: scale(1.4); }
 
-        /* Indicadores de Leitura */
         .read-status { font-size: 10px; margin-left: 4px; }
         .read-status.read { color: #34b7f1; }
         .read-status.sent { color: #8696a0; }
@@ -308,6 +305,7 @@
         let selectedFileBase64 = null;
         let selectedFileType = null;
         let alertInterval = null;
+        let lastRenderedHash = ""; // Para evitar re-renderização desnecessária
         const originalTitle = "Em Pauta - Pro";
 
         const notificationSound = new Audio("https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3");
@@ -322,9 +320,9 @@
         const checkNotificationStatus = () => {
             const btn = document.getElementById('notif-btn');
             if (!("Notification" in window) || Notification.permission === "granted") {
-                btn.classList.add('hidden');
+                btn?.classList.add('hidden');
             } else {
-                btn.classList.remove('hidden');
+                btn?.classList.remove('hidden');
             }
         };
 
@@ -428,14 +426,17 @@
         const markVisibleAsRead = async () => {
             if (!currentUser || document.hidden) return;
             
-            allMessages.forEach(async (m) => {
-                if (m.uid !== currentUser.uid && (!m.seenBy || !m.seenBy.includes(currentUser.uid))) {
-                    const msgRef = doc(db, 'artifacts', appIdSlug, 'public', 'data', 'messages', m.id);
+            // Filtra mensagens que o utilizador actual ainda não viu
+            const unreadMsgs = allMessages.filter(m => m.uid !== currentUser.uid && (!m.seenBy || !m.seenBy.includes(currentUser.uid)));
+            
+            for (const m of unreadMsgs) {
+                const msgRef = doc(db, 'artifacts', appIdSlug, 'public', 'data', 'messages', m.id);
+                try {
                     await updateDoc(msgRef, {
                         seenBy: arrayUnion(currentUser.uid)
                     });
-                }
-            });
+                } catch (e) { console.error("Erro ao marcar como lida:", e); }
+            }
         };
 
         window.togglePanicMode = () => {
@@ -451,19 +452,27 @@
             document.body.classList.toggle('dark');
             const isDark = document.body.classList.contains('dark');
             localStorage.setItem('empauta_theme', isDark ? 'dark' : 'light');
-            document.getElementById('dark-btn').innerHTML = isDark ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
-            document.getElementById('app-header').style.backgroundColor = isDark ? '#202c33' : '#075e54';
+            const header = document.getElementById('app-header');
+            if (header) header.style.backgroundColor = isDark ? '#202c33' : '#075e54';
         };
 
         window.toggleSearch = () => {
             const bar = document.getElementById('search-bar');
-            bar.classList.toggle('hidden');
-            if(!bar.classList.contains('hidden')) document.getElementById('search-input').focus();
+            bar?.classList.toggle('hidden');
+            if(!bar?.classList.contains('hidden')) document.getElementById('search-input')?.focus();
         };
 
-        window.insertEmoji = (e) => { document.getElementById('msg-input').value += e; document.getElementById('msg-input').focus(); };
+        window.insertEmoji = (e) => { 
+            const input = document.getElementById('msg-input');
+            if (input) {
+                input.value += e; 
+                input.focus(); 
+            }
+        };
+
         window.toggleEmojis = () => {
             const box = document.getElementById('emoji-box');
+            if (!box) return;
             box.classList.toggle('hidden');
             if (!box.classList.contains('hidden')) {
                 box.innerHTML = emojiList.map(e => `<button onclick="insertEmoji('${e}')" class="text-2xl p-2 hover:scale-110 transition">${e}</button>`).join('');
@@ -487,9 +496,10 @@
         };
 
         const startChatSession = () => {
-            document.getElementById('login-screen').classList.add('hidden');
-            document.getElementById('chat-app').classList.remove('hidden');
-            document.getElementById('display-nick').innerText = myNick;
+            document.getElementById('login-screen')?.classList.add('hidden');
+            document.getElementById('chat-app')?.classList.remove('hidden');
+            const nickSpan = document.getElementById('display-nick');
+            if (nickSpan) nickSpan.innerText = myNick;
             checkNotificationStatus();
             startListening();
         };
@@ -508,17 +518,26 @@
                 }
                 
                 render();
-                markVisibleAsRead();
+                // Atraso discreto para evitar loop imediato que causa piscar
+                setTimeout(markVisibleAsRead, 500);
             });
         };
 
         window.render = () => {
             const box = document.getElementById('chat-box');
-            const searchVal = document.getElementById('search-input').value.toLowerCase();
-            box.innerHTML = "";
-            const visible = allMessages.slice(filterIndex).filter(m => (m.text || "").toLowerCase().includes(searchVal) || m.sender.toLowerCase().includes(searchVal));
+            if (!box) return;
+
+            const searchVal = (document.getElementById('search-input')?.value || "").toLowerCase();
+            const visibleMessages = allMessages.slice(filterIndex).filter(m => (m.text || "").toLowerCase().includes(searchVal) || m.sender.toLowerCase().includes(searchVal));
             
-            visible.forEach(m => {
+            // Criar um "hash" simplificado para detectar mudanças reais
+            const currentHash = JSON.stringify(visibleMessages.map(m => ({id: m.id, text: m.text, reactions: m.reactions, seen: m.seenBy?.length})));
+            
+            if (currentHash === lastRenderedHash) return; // Evita renderização se nada importante mudou
+            lastRenderedHash = currentHash;
+
+            box.innerHTML = "";
+            visibleMessages.forEach(m => {
                 const isMe = m.sender === myNick;
                 const div = document.createElement('div');
                 div.className = `bubble group ${isMe ? 'my-msg' : 'other-msg'}`;
@@ -550,7 +569,6 @@
                     `</div>`;
                 }
 
-                // Sistema de Checkmarks (Visto)
                 let statusHtml = "";
                 if (isMe) {
                     const isRead = m.seenBy && m.seenBy.length > 0;
@@ -560,7 +578,7 @@
                 }
 
                 let replyHtml = m.reply ? `<span class="reply-tag">${m.reply}</span>` : "";
-                let mediaHtml = m.fileType === 'image' ? `<img src="${m.fileData}" class="msg-image" onclick="window.open(this.src)" />` : (m.fileType === 'audio' ? `<audio controls class="msg-audio"><source src="${m.fileData}" type="audio/mpeg"></audio>` : "");
+                let mediaHtml = m.fileType === 'image' ? `<img src="${m.fileData}" class="msg-image" onclick="window.open(this.src)" loading="lazy" />` : (m.fileType === 'audio' ? `<audio controls class="msg-audio"><source src="${m.fileData}" type="audio/mpeg"></audio>` : "");
                 
                 div.innerHTML = `
                     ${menuBtn}
@@ -580,7 +598,7 @@
 
         window.doSendMessage = async () => {
             const input = document.getElementById('msg-input');
-            if (!input.value.trim() && !selectedFileBase64 || !currentUser) return;
+            if (!input?.value.trim() && !selectedFileBase64 || !currentUser) return;
             const payload = {
                 sender: myNick, text: input.value.trim(),
                 reply: replyTarget ? `${replyTarget.sender}: ${replyTarget.text}` : null,
@@ -590,18 +608,19 @@
             };
             try { 
                 await addDoc(collection(db, 'artifacts', appIdSlug, 'public', 'data', 'messages'), payload); 
-                input.value = ""; window.cancelReply(); window.clearFileSelection();
+                if (input) input.value = ""; 
+                window.cancelReply(); window.clearFileSelection();
             } catch (e) {}
         };
 
         window.logout = () => { localStorage.removeItem('empauta_nick_vfinal'); location.reload(); };
         window.clearScreen = () => { filterIndex = allMessages.length; render(); };
-        window.cancelReply = () => { replyTarget = null; document.getElementById('reply-bar').classList.add('hidden'); };
+        window.cancelReply = () => { replyTarget = null; document.getElementById('reply-bar')?.classList.add('hidden'); };
         
         window.onclick = () => document.querySelectorAll('.msg-dropdown').forEach(m => m.classList.add('hidden'));
 
-        document.getElementById('msg-input').addEventListener('input', function() { this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'; });
-        document.getElementById('msg-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); window.doSendMessage(); } });
+        document.getElementById('msg-input')?.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'; });
+        document.getElementById('msg-input')?.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); window.doSendMessage(); } });
         if(localStorage.getItem('empauta_theme') === 'dark') toggleDarkMode();
     </script>
 </body>
