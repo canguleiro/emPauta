@@ -9,10 +9,8 @@
     <style>
         :root { --app-bg: #efeae2; --header-bg: #075e54; }
         
-        /* Transição suave para Modo Escuro */
         body.dark { --app-bg: #0b141a; --header-bg: #202c33; background-color: #0b141a !important; }
         
-        /* Centralização total no PC */
         body { 
             background-color: #d1d7db; 
             font-family: 'Segoe UI', sans-serif; 
@@ -37,7 +35,6 @@
             transition: background 0.3s ease;
         }
 
-        /* No PC, damos um pouco de margem vertical para parecer um app */
         @media (min-width: 768px) {
             .main-app-container {
                 height: 95vh;
@@ -50,7 +47,6 @@
             padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem;
         }
         
-        /* Balões Estilizados */
         .bubble { 
             max-width: 85%; border-radius: 12px; position: relative; 
             animation: fadeIn 0.2s ease; cursor: pointer; padding: 8px 12px; 
@@ -61,7 +57,6 @@
         .my-msg { background-color: #dcf8c6; align-self: flex-end; border-top-right-radius: 2px; }
         .other-msg { background-color: #ffffff; align-self: flex-start; border-top-left-radius: 2px; }
         
-        /* Modo Escuro para Balões */
         body.dark .my-msg { background-color: #005c4b; color: #e9edef; }
         body.dark .other-msg { background-color: #202c33; color: #e9edef; }
         body.dark .text-gray-800 { color: #e9edef !important; }
@@ -86,67 +81,37 @@
         body.dark footer { background-color: #202c33; border-top: 1px solid #2f3b37; }
         body.dark textarea { background: #2a3942; color: white; }
 
-        /* Estilo para mídias */
         .msg-image { border-radius: 8px; max-width: 100%; margin-top: 5px; cursor: zoom-in; }
         .msg-audio { width: 100%; margin-top: 5px; height: 35px; }
         .loading-spinner { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-        /* --- ESTILO MODO PÂNICO (Bloco de Notas) --- */
         #panic-screen {
-            position: absolute;
-            inset: 0;
-            z-index: 100;
-            background: #fff;
-            display: flex;
-            flex-direction: column;
-            font-family: 'Consolas', 'Courier New', monospace;
-            border-radius: inherit;
+            position: absolute; inset: 0; z-index: 100;
+            background: #fff; display: flex; flex-direction: column;
+            font-family: 'Consolas', 'Courier New', monospace; border-radius: inherit;
         }
-        .notepad-header {
-            background: #f0f0f0;
-            padding: 2px 10px;
-            font-size: 12px;
-            border-bottom: 1px solid #ccc;
-            color: #333;
-            display: flex;
-            gap: 15px;
-        }
-        .notepad-title {
-            background: #fff;
-            padding: 4px 10px;
-            font-size: 11px;
-            color: #666;
-            border-bottom: 1px solid #eee;
-        }
-        .notepad-content {
-            flex: 1;
-            padding: 10px;
-            border: none;
-            outline: none;
-            resize: none;
-            font-size: 14px;
-            line-height: 1.5;
-            color: #000;
-        }
+        .notepad-header { background: #f0f0f0; padding: 2px 10px; font-size: 12px; border-bottom: 1px solid #ccc; color: #333; display: flex; gap: 15px; }
+        .notepad-title { background: #fff; padding: 4px 10px; font-size: 11px; color: #666; border-bottom: 1px solid #eee; }
+        .notepad-content { flex: 1; padding: 10px; border: none; outline: none; resize: none; font-size: 14px; color: #000; }
+
+        /* Ícones de ação na mensagem */
+        .msg-actions { opacity: 0; transition: opacity 0.2s; position: absolute; top: -10px; right: 0; background: white; border-radius: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); padding: 2px 8px; display: flex; gap: 8px; }
+        .bubble:hover .msg-actions { opacity: 1; }
+        body.dark .msg-actions { background: #202c33; border: 1px solid #3b4a54; }
     </style>
 </head>
 <body>
 
     <div class="main-app-container">
-        <!-- Modo Pânico (Invisível por padrão) -->
+        <!-- Modo Pânico -->
         <div id="panic-screen" class="hidden">
             <div class="notepad-title">Sem título - Bloco de Notas</div>
             <div class="notepad-header">
-                <span>Arquivo</span>
-                <span>Editar</span>
-                <span>Formatar</span>
-                <span>Exibir</span>
-                <span>Ajuda</span>
-                <!-- Botão discreto para voltar ao chat (exige senha) -->
+                <span>Arquivo</span><span>Editar</span><span>Formatar</span><span>Exibir</span><span>Ajuda</span>
                 <span onclick="togglePanicMode()" style="cursor: pointer; opacity: 0.5;"><i class="fas fa-cog"></i></span>
             </div>
-            <textarea class="notepad-content" placeholder="Anotações da reunião de hoje..."></textarea>
+            <textarea class="notepad-content" placeholder="Notas da aula..."></textarea>
         </div>
 
         <!-- Login -->
@@ -157,7 +122,7 @@
                 <input type="password" id="pass-input" placeholder="Senha" class="w-full p-4 bg-gray-100 rounded-xl mb-4 text-center text-xl outline-none border border-transparent focus:border-teal-500">
                 <input type="text" id="nick-input" placeholder="Seu Apelido" class="w-full p-4 bg-gray-100 rounded-xl mb-6 text-center outline-none border border-transparent focus:border-teal-500">
                 <button onclick="attemptLogin()" class="w-full bg-teal-700 text-white font-bold py-4 rounded-xl shadow-lg transition-transform active:scale-95 hover:bg-teal-800">ENTRAR</button>
-                <p id="status-text" class="text-[10px] mt-4 text-gray-400 italic">Conectando ao banco de dados...</p>
+                <p id="status-text" class="text-[10px] mt-4 text-gray-400 italic">Conectando...</p>
             </div>
         </div>
 
@@ -175,22 +140,21 @@
                         </div>
                     </div>
                     <div class="flex gap-1">
-                        <button onclick="togglePanicMode()" title="Modo Segurança" class="p-2 hover:bg-black/10 rounded-full transition text-yellow-300"><i class="fas fa-shield-alt"></i></button>
+                        <button onclick="togglePanicMode()" class="p-2 hover:bg-black/10 rounded-full transition text-yellow-300"><i class="fas fa-shield-alt"></i></button>
                         <button onclick="toggleDarkMode()" id="dark-btn" class="p-2 hover:bg-black/10 rounded-full transition"><i class="fas fa-moon"></i></button>
                         <button onclick="toggleSearch()" class="p-2 hover:bg-black/10 rounded-full transition"><i class="fas fa-search"></i></button>
-                        <button onclick="clearScreen()" title="Limpar visualização" class="p-2 hover:bg-black/10 rounded-full transition"><i class="fas fa-broom"></i></button>
+                        <button onclick="clearScreen()" class="p-2 hover:bg-black/10 rounded-full transition"><i class="fas fa-broom"></i></button>
                         <button onclick="logout()" class="p-2 hover:bg-black/10 rounded-full transition text-red-300"><i class="fas fa-sign-out-alt"></i></button>
                     </div>
                 </div>
-                <!-- Barra de Pesquisa -->
                 <div id="search-bar" class="hidden mt-3">
                     <input type="text" id="search-input" oninput="render()" placeholder="Filtrar mensagens..." 
-                           class="w-full p-2 rounded-lg bg-black/20 border-none outline-none text-sm placeholder:text-teal-200 text-white focus:bg-black/30 transition-all">
+                           class="w-full p-2 rounded-lg bg-black/20 border-none outline-none text-sm placeholder:text-teal-200 text-white">
                 </div>
             </header>
 
             <main id="chat-box" class="chat-area">
-                <!-- Conteúdo carregado via JS -->
+                <!-- Conteúdo -->
             </main>
 
             <footer class="shrink-0">
@@ -209,11 +173,9 @@
                             <i class="fas fa-paperclip text-lg"></i>
                         </button>
                     </div>
-
                     <div class="flex-1 bg-white dark:bg-gray-700 rounded-2xl shadow-sm p-1 flex flex-col border border-gray-200 dark:border-gray-600">
                         <textarea id="msg-input" placeholder="Escreva aqui..." rows="1" class="w-full p-2 outline-none resize-none text-sm bg-transparent"></textarea>
                     </div>
-                    
                     <div class="flex flex-col gap-2">
                         <button onclick="toggleEmojis()" class="w-10 h-10 bg-white dark:bg-gray-800 text-gray-400 rounded-full shadow flex items-center justify-center hover:text-teal-600 transition">
                             <i class="far fa-smile text-xl"></i>
@@ -223,18 +185,15 @@
                         </button>
                     </div>
                 </div>
-
-                <!-- Preview de arquivo selecionado -->
                 <div id="file-preview" class="hidden px-4 pb-4">
                     <div class="bg-teal-50 dark:bg-teal-900/30 p-2 rounded-lg flex items-center justify-between border border-teal-200">
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2 text-teal-800 dark:text-teal-200">
                             <i id="file-icon" class="fas fa-file"></i>
                             <span id="file-name" class="text-xs truncate max-w-[200px] font-semibold">arquivo.ext</span>
                         </div>
                         <button onclick="clearFileSelection()" class="text-red-500"><i class="fas fa-times-circle"></i></button>
                     </div>
                 </div>
-
                 <div id="emoji-box" class="hidden grid grid-cols-5 gap-2 pb-4 px-4">
                     <button onclick="insertEmoji('😊')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:bg-gray-50 transition">😊</button>
                     <button onclick="insertEmoji('😂')" class="text-2xl p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:bg-gray-50 transition">😂</button>
@@ -254,7 +213,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyASQkgnQkeKjXKrmT3yMV9zcUVxec3NvrA",
@@ -269,7 +228,6 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
         const appIdSlug = "em-pauta-main"; 
-
         const MASTER_PASS = "2407";
 
         let currentUser = null;
@@ -279,25 +237,40 @@
         let filterIndex = 0;
         let selectedFileBase64 = null;
         let selectedFileType = null;
-        
+        let alertInterval = null;
+        const originalTitle = "Em Pauta - Pro";
+
         const notificationSound = new Audio("https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3");
 
-        // --- Funções de Mídia ---
+        // --- Alerta Visual na Aba ---
+        const startTabAlert = () => {
+            if (document.hidden && !alertInterval) {
+                alertInterval = setInterval(() => {
+                    document.title = document.title === originalTitle ? "🔴 Nova Mensagem!" : originalTitle;
+                }, 1000);
+            }
+        };
+
+        window.onfocus = () => {
+            if (alertInterval) {
+                clearInterval(alertInterval);
+                alertInterval = null;
+                document.title = originalTitle;
+            }
+        };
+
+        // --- Mídia ---
         window.handleFileSelect = (input) => {
             const file = input.files[0];
             if (!file) return;
-
             if (file.size > 800000) {
-                alert("O arquivo é muito grande! Escolha algo menor que 800KB.");
-                input.value = "";
+                alert("Arquivo muito grande (máx 800KB)");
                 return;
             }
-
             const reader = new FileReader();
             reader.onload = (e) => {
                 selectedFileBase64 = e.target.result;
                 selectedFileType = file.type.startsWith('image') ? 'image' : 'audio';
-                
                 document.getElementById('file-name').innerText = file.name;
                 document.getElementById('file-icon').className = selectedFileType === 'image' ? 'fas fa-image' : 'fas fa-microphone';
                 document.getElementById('file-preview').classList.remove('hidden');
@@ -312,23 +285,15 @@
             document.getElementById('file-preview').classList.add('hidden');
         };
 
-        // --- Funções de UI ---
+        // --- UI ---
         window.togglePanicMode = () => {
             const panic = document.getElementById('panic-screen');
-            const isEntering = panic.classList.contains('hidden');
-
-            if (isEntering) {
-                // Entrando no modo pânico
+            if (panic.classList.contains('hidden')) {
                 panic.classList.remove('hidden');
                 document.querySelector('.notepad-content').focus();
             } else {
-                // Saindo do modo pânico - exige senha
-                const pass = prompt("Sistema Restrito. Digite a senha para restaurar:");
-                if (pass === MASTER_PASS) {
-                    panic.classList.add('hidden');
-                } else if (pass !== null) {
-                    // Password box customizada não necessária aqui, apenas ignoramos se errar
-                }
+                const pass = prompt("Digite a senha para restaurar:");
+                if (pass === MASTER_PASS) panic.classList.add('hidden');
             }
         };
 
@@ -346,8 +311,23 @@
             if(!bar.classList.contains('hidden')) document.getElementById('search-input').focus();
         };
 
-        if(localStorage.getItem('empauta_theme') === 'dark') toggleDarkMode();
+        // --- Firestore Operations ---
+        window.deleteMsg = async (id) => {
+            if (confirm("Deseja apagar esta mensagem para todos?")) {
+                await deleteDoc(doc(db, 'artifacts', appIdSlug, 'public', 'data', 'messages', id));
+            }
+        };
 
+        window.editMsg = async (id, currentText) => {
+            const newText = prompt("Editar mensagem:", currentText);
+            if (newText !== null && newText.trim() !== "" && newText !== currentText) {
+                await updateDoc(doc(db, 'artifacts', appIdSlug, 'public', 'data', 'messages', id), {
+                    text: newText.trim() + " (editada)"
+                });
+            }
+        };
+
+        // --- App Flow ---
         onAuthStateChanged(auth, (user) => {
             currentUser = user;
             if (user) {
@@ -365,7 +345,7 @@
                 myNick = nick;
                 localStorage.setItem('empauta_nick_vfinal', nick);
                 startChatSession();
-            } else { alert("Senha incorreta ou apelido ausente."); }
+            } else { alert("Acesso negado."); }
         };
 
         const startChatSession = () => {
@@ -380,7 +360,6 @@
             onSnapshot(colRef, (snap) => {
                 const list = [];
                 snap.forEach(d => list.push({ id: d.id, ...d.data() }));
-                
                 const oldLen = allMessages.length;
                 allMessages = list.sort((a,b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
                 
@@ -389,10 +368,10 @@
                     if (ultima.sender !== myNick) {
                         if(document.getElementById('panic-screen').classList.contains('hidden')) {
                             notificationSound.play().catch(() => {});
+                            startTabAlert();
                         }
                     }
                 }
-                
                 render();
             });
         };
@@ -401,7 +380,6 @@
             const box = document.getElementById('chat-box');
             const searchVal = document.getElementById('search-input').value.toLowerCase();
             box.innerHTML = "";
-            
             const visible = allMessages.slice(filterIndex).filter(m => 
                 (m.text || "").toLowerCase().includes(searchVal) || m.sender.toLowerCase().includes(searchVal)
             );
@@ -418,6 +396,13 @@
                     document.getElementById('msg-input').focus();
                 };
 
+                let actionsHtml = isMe ? `
+                    <div class="msg-actions">
+                        <button onclick="editMsg('${m.id}', '${m.text}')" class="text-blue-500 text-[10px]"><i class="fas fa-edit"></i></button>
+                        <button onclick="deleteMsg('${m.id}')" class="text-red-500 text-[10px]"><i class="fas fa-trash"></i></button>
+                    </div>
+                ` : "";
+
                 let replyHtml = m.reply ? `<span class="reply-tag">${m.reply}</span>` : "";
                 let mediaHtml = "";
                 if (m.fileType === 'image') {
@@ -427,6 +412,7 @@
                 }
                 
                 div.innerHTML = `
+                    ${actionsHtml}
                     <div class="text-[9px] font-bold text-teal-800 uppercase mb-1 opacity-70">${m.sender}</div>
                     ${replyHtml}
                     ${mediaHtml}
@@ -444,29 +430,19 @@
             const input = document.getElementById('msg-input');
             const text = input.value.trim();
             if (!text && !selectedFileBase64 || !currentUser) return;
-
             const sendBtn = document.getElementById('send-btn');
             sendBtn.innerHTML = '<i class="fas fa-circle-notch loading-spinner"></i>';
             sendBtn.disabled = true;
-
             const payload = {
-                sender: myNick, 
-                text: text,
+                sender: myNick, text: text,
                 reply: replyTarget ? `${replyTarget.sender}: ${replyTarget.text}` : null,
-                fileData: selectedFileBase64,
-                fileType: selectedFileType,
-                timestamp: serverTimestamp(), 
-                uid: currentUser.uid
+                fileData: selectedFileBase64, fileType: selectedFileType,
+                timestamp: serverTimestamp(), uid: currentUser.uid
             };
-
             try { 
                 await addDoc(collection(db, 'artifacts', appIdSlug, 'public', 'data', 'messages'), payload); 
-                input.value = ""; 
-                input.style.height = "auto"; 
-                window.cancelReply();
-                window.clearFileSelection();
-            } catch (e) {
-                // Erro silencioso
+                input.value = ""; input.style.height = "auto"; 
+                window.cancelReply(); window.clearFileSelection();
             } finally {
                 sendBtn.innerHTML = '<i class="fas fa-paper-plane text-lg"></i>';
                 sendBtn.disabled = false;
@@ -488,6 +464,7 @@
         document.getElementById('msg-input').addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); window.doSendMessage(); }
         });
+        if(localStorage.getItem('empauta_theme') === 'dark') toggleDarkMode();
     </script>
 </body>
 </html>
