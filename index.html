@@ -96,7 +96,7 @@
         .notepad-content { flex: 1; padding: 10px; border: none; outline: none; resize: none; font-size: 14px; color: #000; }
 
         /* Ícones de ação na mensagem */
-        .msg-actions { opacity: 0; transition: opacity 0.2s; position: absolute; top: -10px; right: 0; background: white; border-radius: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); padding: 2px 8px; display: flex; gap: 8px; }
+        .msg-actions { opacity: 0; transition: opacity 0.2s; position: absolute; top: -10px; right: 0; background: white; border-radius: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); padding: 2px 8px; display: flex; gap: 8px; z-index: 10; }
         .bubble:hover .msg-actions { opacity: 1; }
         body.dark .msg-actions { background: #202c33; border: 1px solid #3b4a54; }
     </style>
@@ -242,22 +242,46 @@
 
         const notificationSound = new Audio("https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3");
 
-        // --- Alerta Visual na Aba ---
-        const startTabAlert = () => {
-            if (document.hidden && !alertInterval) {
-                alertInterval = setInterval(() => {
-                    document.title = document.title === originalTitle ? "🔴 Nova Mensagem!" : originalTitle;
-                }, 1000);
+        // --- Sistema de Notificações e Alerta ---
+        const requestNotificationPermission = () => {
+            if ("Notification" in window) {
+                Notification.requestPermission();
             }
         };
 
-        window.onfocus = () => {
+        const triggerAlerts = (sender, text) => {
+            // Só dispara se o Modo Pânico estiver desligado
+            if (!document.getElementById('panic-screen').classList.contains('hidden')) return;
+
+            // 1. Som
+            notificationSound.play().catch(() => {});
+
+            // 2. Alerta Visual na Aba (se não estiver em foco)
+            if (document.hidden && !alertInterval) {
+                alertInterval = setInterval(() => {
+                    document.title = document.title === originalTitle ? "🔴 NOVA MENSAGEM!" : originalTitle;
+                }, 1000);
+            }
+
+            // 3. Notificação do Sistema (para quando está minimizado)
+            if (document.hidden && Notification.permission === "granted") {
+                new Notification("Em Pauta", {
+                    body: `${sender}: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`,
+                    icon: "https://cdn-icons-png.flaticon.com/512/733/733585.png" // Ícone genérico de chat
+                });
+            }
+        };
+
+        const stopTabAlert = () => {
             if (alertInterval) {
                 clearInterval(alertInterval);
                 alertInterval = null;
                 document.title = originalTitle;
             }
         };
+
+        window.addEventListener('focus', stopTabAlert);
+        window.addEventListener('click', stopTabAlert);
 
         // --- Mídia ---
         window.handleFileSelect = (input) => {
@@ -291,6 +315,7 @@
             if (panic.classList.contains('hidden')) {
                 panic.classList.remove('hidden');
                 document.querySelector('.notepad-content').focus();
+                stopTabAlert(); // Garante silêncio no modo pânico
             } else {
                 const pass = prompt("Digite a senha para restaurar:");
                 if (pass === MASTER_PASS) panic.classList.add('hidden');
@@ -344,6 +369,7 @@
             if (pass === MASTER_PASS && nick) {
                 myNick = nick;
                 localStorage.setItem('empauta_nick_vfinal', nick);
+                requestNotificationPermission(); // Pede permissão ao entrar
                 startChatSession();
             } else { alert("Acesso negado."); }
         };
@@ -366,10 +392,7 @@
                 if (allMessages.length > oldLen && oldLen > 0) {
                     const ultima = allMessages[allMessages.length - 1];
                     if (ultima.sender !== myNick) {
-                        if(document.getElementById('panic-screen').classList.contains('hidden')) {
-                            notificationSound.play().catch(() => {});
-                            startTabAlert();
-                        }
+                        triggerAlerts(ultima.sender, ultima.text || "[Arquivo]");
                     }
                 }
                 render();
@@ -398,8 +421,8 @@
 
                 let actionsHtml = isMe ? `
                     <div class="msg-actions">
-                        <button onclick="editMsg('${m.id}', '${m.text}')" class="text-blue-500 text-[10px]"><i class="fas fa-edit"></i></button>
-                        <button onclick="deleteMsg('${m.id}')" class="text-red-500 text-[10px]"><i class="fas fa-trash"></i></button>
+                        <button onclick="editMsg('${m.id}', '${m.text}')" class="text-blue-500 hover:scale-110"><i class="fas fa-edit"></i></button>
+                        <button onclick="deleteMsg('${m.id}')" class="text-red-500 hover:scale-110"><i class="fas fa-trash"></i></button>
                     </div>
                 ` : "";
 
