@@ -99,11 +99,21 @@
         .bubble:hover .msg-actions { opacity: 1; }
         body.dark .msg-actions { background: #202c33; border: 1px solid #3b4a54; }
 
-        /* Ajuste do grid de emojis */
         #emoji-box {
             max-height: 200px;
             overflow-y: auto;
             border-top: 1px solid rgba(0,0,0,0.1);
+        }
+
+        /* Indicador de Notificação Pendente */
+        .notif-badge {
+            background: #ff3b30;
+            border-radius: 50%;
+            width: 8px;
+            height: 8px;
+            position: absolute;
+            top: 2px;
+            right: 2px;
         }
     </style>
 </head>
@@ -146,7 +156,11 @@
                         </div>
                     </div>
                     <div class="flex gap-1">
-                        <button onclick="togglePanicMode()" class="p-2 hover:bg-black/10 rounded-full transition text-yellow-300"><i class="fas fa-shield-alt"></i></button>
+                        <!-- Botão de Notificação (Só aparece se permissão não foi dada) -->
+                        <button id="notif-btn" onclick="requestNotificationPermission()" title="Ativar Notificações" class="p-2 hover:bg-black/10 rounded-full transition text-blue-300 relative">
+                            <i class="fas fa-bell"></i>
+                        </button>
+                        <button onclick="togglePanicMode()" title="Modo Segurança" class="p-2 hover:bg-black/10 rounded-full transition text-yellow-300"><i class="fas fa-shield-alt"></i></button>
                         <button onclick="toggleDarkMode()" id="dark-btn" class="p-2 hover:bg-black/10 rounded-full transition"><i class="fas fa-moon"></i></button>
                         <button onclick="toggleSearch()" class="p-2 hover:bg-black/10 rounded-full transition"><i class="fas fa-search"></i></button>
                         <button onclick="clearScreen()" class="p-2 hover:bg-black/10 rounded-full transition"><i class="fas fa-broom"></i></button>
@@ -240,7 +254,6 @@
 
         const notificationSound = new Audio("https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3");
 
-        // Lista Expandida de Emojis
         const emojiList = [
             "😊", "😂", "🤣", "😍", "😒", "😭", "😱", "😴", "🤮", "😎", 
             "🤔", "🤨", "🙄", "🤫", "🤥", "🤡", "💩", "👻", "👽", "👾",
@@ -248,24 +261,24 @@
             "✅", "⚠️", "❌", "🚫", "💯", "💢", "💎", "💰", "💡", "🔔"
         ];
 
-        // --- Registro de Service Worker para Notificações PWA estáveis ---
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                const swBlob = new Blob([`self.addEventListener('push', function(e) { 
-                    const options = { body: e.data.text(), icon: 'https://cdn-icons-png.flaticon.com/512/733/733585.png' };
-                    e.waitUntil(self.registration.showNotification('Em Pauta', options)); 
-                });`], { type: 'application/javascript' });
-                const swUrl = URL.createObjectURL(swBlob);
-                navigator.serviceWorker.register(swUrl).catch(() => {});
-            });
-        }
-
         // --- Sistema de Notificações e Alerta ---
-        const requestNotificationPermission = () => {
+        const checkNotificationStatus = () => {
+            const btn = document.getElementById('notif-btn');
+            if (!("Notification" in window) || Notification.permission === "granted") {
+                btn.classList.add('hidden');
+            } else {
+                btn.classList.remove('hidden');
+            }
+        };
+
+        window.requestNotificationPermission = () => {
             if ("Notification" in window) {
                 Notification.requestPermission().then(permission => {
                     if (permission === "granted") {
-                        console.log("Permissão de notificação concedida.");
+                        new Notification("Em Pauta", { body: "Notificações ativadas com sucesso!" });
+                        checkNotificationStatus();
+                    } else if (permission === "denied") {
+                        alert("As notificações foram bloqueadas no navegador. Clique no cadeado ao lado do link para desbloquear.");
                     }
                 });
             }
@@ -282,12 +295,11 @@
                 }, 1000);
             }
 
-            // Melhoria na notificação de sistema
             if (document.hidden && Notification.permission === "granted") {
                 const n = new Notification("Em Pauta", {
                     body: `${sender}: ${text.substring(0, 60)}${text.length > 60 ? '...' : ''}`,
                     icon: "https://cdn-icons-png.flaticon.com/512/733/733585.png",
-                    tag: "new-message", // Evita empilhar várias notificações se chegarem muitas juntas
+                    tag: "new-message",
                     renotify: true
                 });
                 n.onclick = () => { window.focus(); n.close(); };
@@ -405,7 +417,8 @@
             if (pass === MASTER_PASS && nick) {
                 myNick = nick;
                 localStorage.setItem('empauta_nick_vfinal', nick);
-                requestNotificationPermission(); 
+                // Tenta pedir permissão no momento exato do clique
+                window.requestNotificationPermission(); 
                 startChatSession();
             } else { alert("Acesso negado."); }
         };
@@ -414,6 +427,7 @@
             document.getElementById('login-screen').classList.add('hidden');
             document.getElementById('chat-app').classList.remove('hidden');
             document.getElementById('display-nick').innerText = myNick;
+            checkNotificationStatus();
             startListening();
         };
 
