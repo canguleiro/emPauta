@@ -8,12 +8,10 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         :root { --app-bg: #efeae2; --header-bg: #075e54; }
-        body.dark { --app-bg: #0b141a; --header-bg: #202c33; background-color: #0b141a !important; }
         
         body { 
             background-color: #d1d7db; 
             font-family: 'Segoe UI', sans-serif; 
-            transition: background 0.3s ease;
             display: flex; justify-content: center; align-items: center;
             height: 100vh; margin: 0; overflow: hidden;
         }
@@ -22,7 +20,7 @@
             width: 100%; max-width: 500px; height: 100vh; 
             background-color: var(--app-bg); position: relative; 
             box-shadow: 0 0 30px rgba(0,0,0,0.2); 
-            display: flex; flex-direction: column; transition: background 0.3s ease; 
+            display: flex; flex-direction: column; 
         }
 
         @media (min-width: 768px) { .main-app-container { height: 95vh; border-radius: 10px; } }
@@ -43,16 +41,12 @@
         
         .my-msg { background-color: #dcf8c6; align-self: flex-end; border-top-right-radius: 2px; }
         .other-msg { background-color: #ffffff; align-self: flex-start; border-top-left-radius: 2px; }
-        body.dark .my-msg { background-color: #005c4b; color: #e9edef; }
-        body.dark .other-msg { background-color: #202c33; color: #e9edef; }
-        body.dark .text-gray-800, body.dark .text-gray-200 { color: #e9edef !important; }
 
         .reply-tag { 
             border-left: 4px solid #075e54; background: rgba(0,0,0,0.06); 
             padding: 6px; margin-bottom: 6px; font-size: 0.8rem; 
             color: #555; font-style: italic; border-radius: 4px; display: block;
         }
-        body.dark .reply-tag { background: rgba(255,255,255,0.05); color: #a1a1a1; }
         
         #login-screen { 
             position: absolute; inset: 0; z-index: 100;
@@ -63,8 +57,7 @@
         
         .hidden { display: none !important; }
         footer { background-color: #f0f0f0; border-top: 1px solid #e0e0e0; z-index: 10; }
-        body.dark footer { background-color: #202c33; border-top: 1px solid #2f3b37; }
-        body.dark textarea { background: #2a3942; color: white; }
+        textarea { background: white; color: black; }
 
         .msg-image { border-radius: 8px; max-width: 100%; margin-top: 5px; cursor: zoom-in; }
         
@@ -89,15 +82,12 @@
             z-index: 100; overflow: hidden; border: 1px solid #eee; top: 22px; 
         }
         .menu-right { right: 0; } .menu-left { left: 0; }
-        body.dark .msg-dropdown { background: #233138; border-color: #3b4a54; }
         .msg-dropdown button { 
             width: 100%; text-align: left; padding: 10px 14px; 
             font-size: 12px; display: flex; align-items: center; 
             gap: 10px; color: #333; border: none; background: transparent; cursor: pointer; 
         }
-        body.dark .msg-dropdown button { color: #e9edef; }
         .msg-dropdown button:hover { background: #f5f5f5; }
-        body.dark .msg-dropdown button:hover { background: #182229; }
 
         .reaction-badge { 
             background: rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.1); 
@@ -114,7 +104,6 @@
             display: flex; padding: 8px; gap: 10px;
             border-bottom: 1px solid #eee; justify-content: center;
         }
-        body.dark .react-tray { border-color: #3b4a54; }
         .react-tray span { font-size: 18px; transition: transform 0.2s; cursor: pointer; }
         .react-tray span:hover { transform: scale(1.4); }
     </style>
@@ -157,7 +146,7 @@
                     <div class="flex gap-1">
                         <button id="notif-btn" onclick="requestNotificationPermission()" title="Ativar Notificações" class="p-2 hover:bg-black/10 rounded-full transition text-blue-300 relative"><i class="fas fa-bell"></i></button>
                         <button onclick="togglePanicMode()" title="Modo Segurança" class="p-2 hover:bg-black/10 rounded-full transition text-yellow-300"><i class="fas fa-shield-alt"></i></button>
-                        <button onclick="toggleDarkMode()" id="dark-btn" class="p-2 hover:bg-black/10 rounded-full transition"><i class="fas fa-moon"></i></button>
+                        <button onclick="clearGlobalChat()" title="Limpar Chat Definitivamente" class="p-2 hover:bg-black/10 rounded-full transition text-orange-300"><i class="fas fa-broom"></i></button>
                         <button onclick="toggleSearch()" class="p-2 hover:bg-black/10 rounded-full transition"><i class="fas fa-search"></i></button>
                         <button onclick="logout()" class="p-2 hover:bg-black/10 rounded-full transition text-red-300"><i class="fas fa-sign-out-alt"></i></button>
                     </div>
@@ -178,17 +167,17 @@
                 <div class="p-3 flex items-end gap-2">
                     <div class="flex flex-col gap-2">
                         <input type="file" id="file-input" class="hidden" accept="image/*" onchange="handleFileSelect(this)">
-                        <button onclick="document.getElementById('file-input').click()" class="w-10 h-10 bg-white dark:bg-gray-800 text-teal-600 rounded-full shadow flex items-center justify-center hover:scale-105 transition"><i class="fas fa-paperclip text-lg"></i></button>
+                        <button onclick="document.getElementById('file-input').click()" class="w-10 h-10 bg-white text-teal-600 rounded-full shadow flex items-center justify-center hover:scale-105 transition"><i class="fas fa-paperclip text-lg"></i></button>
                     </div>
-                    <div class="flex-1 bg-white dark:bg-gray-700 rounded-2xl shadow-sm p-1 flex flex-col border border-gray-200 dark:border-gray-600">
+                    <div class="flex-1 bg-white rounded-2xl shadow-sm p-1 flex flex-col border border-gray-200">
                         <textarea id="msg-input" placeholder="Mensagem" rows="1" class="w-full p-2 outline-none resize-none text-sm bg-transparent"></textarea>
                     </div>
                     <div class="flex flex-col gap-2">
-                        <button onclick="toggleEmojis()" class="w-10 h-10 bg-white dark:bg-gray-800 text-gray-400 rounded-full shadow flex items-center justify-center hover:text-teal-600 transition"><i class="far fa-smile text-xl"></i></button>
+                        <button onclick="toggleEmojis()" class="w-10 h-10 bg-white text-gray-400 rounded-full shadow flex items-center justify-center hover:text-teal-600 transition"><i class="far fa-smile text-xl"></i></button>
                         <button id="send-btn" onclick="doSendMessage()" class="w-12 h-12 bg-[#00a884] text-white rounded-full shadow-lg flex items-center justify-center active:scale-90 hover:bg-[#008f72]"><i class="fas fa-paper-plane text-lg"></i></button>
                     </div>
                 </div>
-                <div id="emoji-box" class="hidden grid grid-cols-6 gap-2 pb-4 px-4 bg-gray-50 dark:bg-gray-900/50"></div>
+                <div id="emoji-box" class="hidden grid grid-cols-6 gap-2 pb-4 px-4 bg-gray-50"></div>
             </footer>
         </div>
     </div>
@@ -263,7 +252,6 @@
             });
         };
 
-        // Heartbeat
         setInterval(() => { if(auth.currentUser && myNick) updateMyStatus(false); }, 30000);
 
         // --- ALERTAS E NOTIFICAÇÕES PRIVADAS ---
@@ -317,7 +305,19 @@
             if (newText && newText !== currentText) await updateDoc(doc(db, 'artifacts', appIdSlug, 'public', 'data', 'messages', id), { text: newText + " (editada)" });
         };
 
-        window.deleteMsg = async (id) => { if(confirm("Apagar para todos?")) await deleteDoc(doc(db, 'artifacts', appIdSlug, 'public', 'data', 'messages', id)); };
+        window.deleteMsg = async (id) => { if(confirm("Apagar mensagem para todos?")) await deleteDoc(doc(db, 'artifacts', appIdSlug, 'public', 'data', 'messages', id)); };
+
+        // --- LIMPEZA DEFINITIVA DO BANCO DE DADOS ---
+        window.clearGlobalChat = async () => {
+            if (confirm("ATENÇÃO: Deseja apagar permanentemente TODAS as mensagens do banco de dados para todos os usuários? Esta ação não pode ser desfeita.")) {
+                for (const m of allMessages) {
+                    try {
+                        await deleteDoc(doc(db, 'artifacts', appIdSlug, 'public', 'data', 'messages', m.id));
+                    } catch (e) { console.error("Erro ao apagar mensagem:", e); }
+                }
+                alert("O histórico de mensagens foi limpo com sucesso!");
+            }
+        };
 
         // --- APP CORE ---
         onAuthStateChanged(auth, (user) => {
@@ -395,7 +395,7 @@
                         ${isMe ? `<button onclick="editMsg('${m.id}', '${m.text}')" class="text-blue-500"><i class="fas fa-edit"></i> Editar</button>` : ''}
                         <button onclick="deleteMsg('${m.id}')" class="text-red-500"><i class="fas fa-trash"></i> Excluir</button>
                     </div>
-                    <div class="text-[9px] font-bold text-teal-800 dark:text-teal-400 uppercase mb-1 opacity-70 pr-4">${m.sender}</div>
+                    <div class="text-[9px] font-bold text-teal-800 uppercase mb-1 opacity-70 pr-4">${m.sender}</div>
                     ${m.reply ? `<div class="reply-tag">${m.reply}</div>` : ""}
                     ${m.fileData ? `<img src="${m.fileData}" class="msg-image" onclick="window.open(this.src)" />` : ""}
                     <div class="text-sm break-words whitespace-pre-wrap">${m.text || ""}</div>
@@ -438,7 +438,6 @@
             else if (prompt("Segurança:") === MASTER_PASS) p.classList.add('hidden');
         };
 
-        window.toggleDarkMode = () => { document.body.classList.toggle('dark'); localStorage.setItem('empauta_theme', document.body.classList.contains('dark')?'dark':'light'); };
         window.toggleSearch = () => document.getElementById('search-bar').classList.toggle('hidden');
         window.toggleEmojis = () => {
             const eb = document.getElementById('emoji-box'); eb.classList.toggle('hidden');
@@ -447,7 +446,6 @@
         window.logout = () => { localStorage.removeItem('empauta_nick_vfinal'); location.reload(); };
         window.onclick = () => document.querySelectorAll('.msg-dropdown').forEach(m => m.classList.add('hidden'));
         document.getElementById('msg-input')?.addEventListener('keydown', (e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); window.doSendMessage(); } });
-        if(localStorage.getItem('empauta_theme')==='dark') document.body.classList.add('dark');
     </script>
 </body>
 </html>
