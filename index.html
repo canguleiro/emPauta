@@ -1,578 +1,176 @@
-<!DOCTYPE html>
-<html lang="pt-pt">
+<!doctype html>
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Em Pauta - Pro</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        :root { --app-bg: #efeae2; --header-bg: #075e54; }
-        
-        body { 
-            background-color: #d1d7db; 
-            font-family: 'Segoe UI', sans-serif; 
-            display: flex; justify-content: center; align-items: center;
-            height: 100vh; margin: 0; overflow: hidden;
-        }
-        
-        .main-app-container { 
-            width: 100%; max-width: 500px; height: 100vh; 
-            background-color: var(--app-bg); position: relative; 
-            box-shadow: 0 0 30px rgba(0,0,0,0.2); 
-            display: flex; flex-direction: column; 
-        }
-
-        @media (min-width: 768px) { .main-app-container { height: 95vh; border-radius: 10px; } }
-
-        .chat-area { 
-            flex: 1; overflow-y: auto; scroll-behavior: smooth; 
-            padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem; 
-            position: relative;
-        }
-        
-        /* Balões de Mensagem */
-        .bubble-wrapper { display: flex; gap: 8px; align-items: flex-end; width: 100%; }
-        .bubble-wrapper.my-wrapper { flex-direction: row-reverse; }
-
-        .avatar {
-            width: 28px; height: 28px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            color: white; font-size: 11px; font-weight: bold; flex-shrink: 0;
-            margin-bottom: 2px;
-        }
-
-        .bubble { 
-            max-width: 80%; border-radius: 12px; position: relative; 
-            animation: fadeIn 0.2s ease; cursor: pointer; padding: 8px 12px; 
-            box-shadow: 0 1px 1px rgba(0,0,0,0.1); 
-        }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        
-        .my-msg { background-color: #dcf8c6; border-top-right-radius: 2px; }
-        .other-msg { background-color: #ffffff; border-top-left-radius: 2px; }
-
-        .reply-tag { 
-            border-left: 4px solid #075e54; background: rgba(0,0,0,0.06); 
-            padding: 6px; margin-bottom: 6px; font-size: 0.8rem; 
-            color: #555; font-style: italic; border-radius: 4px; display: block;
-        }
-        
-        #login-screen { 
-            position: absolute; inset: 0; z-index: 100;
-            background: linear-gradient(135deg, #075e54 0%, #128c7e 100%); 
-            display: flex; align-items: center; justify-content: center; padding: 1.5rem;
-            border-radius: inherit;
-        }
-        
-        .hidden { display: none !important; }
-        footer { background-color: #f0f0f0; border-top: 1px solid #e0e0e0; z-index: 10; }
-        
-        .msg-image { border-radius: 8px; max-width: 100%; margin-top: 5px; cursor: zoom-in; }
-        
-        /* Mensagem Fixada */
-        #pinned-bar {
-            background: white; border-bottom: 1px solid #eee; padding: 8px 15px;
-            display: flex; align-items: center; gap: 10px; font-size: 12px;
-            z-index: 5; cursor: pointer;
-        }
-        #pinned-bar i { color: #075e54; }
-
-        /* Modo Pânico */
-        #panic-screen { 
-            position: absolute; inset: 0; z-index: 200; background: #fff; 
-            display: flex; flex-direction: column; font-family: 'Consolas', 'Courier New', monospace; 
-            border-radius: inherit; 
-        }
-        .notepad-header { background: #f0f0f0; padding: 2px 10px; font-size: 12px; border-bottom: 1px solid #ccc; color: #333; display: flex; gap: 15px; }
-
-        /* Dropdown de Mensagem */
-        .msg-menu-btn {
-            position: absolute; top: 2px; right: 4px; 
-            color: rgba(0,0,0,0.2); padding: 0 4px; 
-            font-size: 9px; opacity: 0; z-index: 5;
-        }
-        .bubble:hover .msg-menu-btn { opacity: 1; }
-        .msg-dropdown { 
-            position: absolute; background: white; border-radius: 8px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2); min-width: 140px; 
-            z-index: 100; overflow: hidden; border: 1px solid #eee; top: 22px; 
-        }
-        .menu-right { right: 0; } .menu-left { left: 0; }
-        .msg-dropdown button { 
-            width: 100%; text-align: left; padding: 10px 14px; 
-            font-size: 12px; display: flex; align-items: center; 
-            gap: 10px; color: #333; border: none; background: transparent; cursor: pointer; 
-        }
-        .msg-dropdown button:hover { background: #f5f5f5; }
-
-        .reaction-badge { 
-            background: rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.1); 
-            border-radius: 10px; padding: 1px 6px; font-size: 11px; 
-            display: flex; align-items: center; gap: 3px; 
-        }
-        .read-status { font-size: 10px; margin-left: 4px; }
-        
-        #emoji-box { max-height: 180px; overflow-y: auto; border-top: 1px solid rgba(0,0,0,0.1); padding: 10px; }
-        #system-status { font-size: 10px; color: #b2d8d2; font-style: italic; margin-top: 2px; height: 12px; overflow: hidden; }
-        
-        .react-tray { display: flex; padding: 8px; gap: 10px; border-bottom: 1px solid #eee; justify-content: center; }
-        .react-tray span { font-size: 18px; transition: transform 0.2s; cursor: pointer; }
-        .react-tray span:hover { transform: scale(1.3); }
-
-        /* Estilo gravação */
-        .recording-active { color: #e74c3c !important; animation: pulse 1s infinite; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b3d35">
+  <meta name="description" content="Comunicador privado de duas pessoas.">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://*.firebasedatabase.app https://firebasestorage.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com; script-src 'self' https://www.gstatic.com; style-src 'self'; img-src 'self' blob: data: https://firebasestorage.googleapis.com; media-src 'self' blob: https://firebasestorage.googleapis.com; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self';">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <title>Notas</title>
+  <style>
+    :root{--bg:#e8e5df;--panel:#f7f7f5;--ink:#18201d;--muted:#6e7773;--green:#0b3d35;--green2:#0e6a5b;--mine:#d8f4e5;--other:#fff;--danger:#b42318;--line:#d8d9d6}
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0}
+    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#d2d6d4;color:var(--ink);overflow:hidden}
+    button,input,textarea{font:inherit}
+    button{border:0}
+    .app{width:100%;height:100%;max-width:620px;margin:auto;background:var(--bg);position:relative;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 0 30px #0002}
+    .screen{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(145deg,#0b3d35,#126b5c);color:white}
+    .card{width:min(100%,380px);background:white;color:var(--ink);border-radius:24px;padding:28px;box-shadow:0 20px 60px #0004}
+    .brand{font-weight:800;font-size:27px;letter-spacing:-.04em}
+    .sub{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:#8b9490;margin:5px 0 22px}
+    .field{width:100%;padding:14px 15px;border:1px solid var(--line);border-radius:14px;outline:none;margin:6px 0;background:#fafafa}
+    .field:focus{border-color:#2b8978;box-shadow:0 0 0 3px #2b897822}
+    .primary{width:100%;padding:14px;border-radius:14px;background:var(--green);color:white;font-weight:750;cursor:pointer}
+    .secondary{padding:10px 12px;border-radius:12px;background:#eef1ef;color:var(--green);cursor:pointer}
+    .tiny{font-size:11px;color:#737b77;line-height:1.45}
+    .error{color:var(--danger);font-size:12px;min-height:18px;margin-top:8px}
+    .hidden{display:none!important}
+    header{background:var(--green);color:#fff;padding:calc(10px + env(safe-area-inset-top)) 12px 10px;display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:68px}
+    .head-left{display:flex;align-items:center;gap:10px;min-width:0}
+    .avatar{width:38px;height:38px;border-radius:50%;background:#ffffff1c;display:grid;place-items:center;font-size:15px;font-weight:800;flex:none}
+    .head-name{font-weight:750;line-height:1.1}
+    .head-status{font-size:11px;color:#b9d8d1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px}
+    .actions{display:flex;gap:2px}
+    .icon{width:38px;height:38px;border-radius:50%;background:transparent;color:#fff;display:grid;place-items:center;cursor:pointer}
+    .icon:hover{background:#ffffff15}
+    .search{padding:8px 12px;background:var(--green)}
+    .search input{width:100%;border:0;outline:0;border-radius:12px;padding:10px 12px;background:#ffffff16;color:white}
+    .search input::placeholder{color:#c6ddd8}
+    .pinned{background:white;border-bottom:1px solid var(--line);padding:8px 12px;display:flex;gap:8px;align-items:center;font-size:12px;cursor:pointer}
+    .chat{flex:1;overflow:auto;padding:12px 10px 10px;display:flex;flex-direction:column;gap:7px;scroll-behavior:smooth}
+    .date-sep{align-self:center;background:#d7d7d2;padding:4px 10px;border-radius:10px;font-size:10px;color:#656b68;margin:8px}
+    .msg-row{display:flex;gap:6px;align-items:flex-end}
+    .msg-row.mine{justify-content:flex-end}
+    .bubble{max-width:min(84%,430px);background:var(--other);border-radius:14px;padding:8px 10px;box-shadow:0 1px 2px #0001;position:relative}
+    .mine .bubble{background:var(--mine);border-bottom-right-radius:4px}
+    .other .bubble{border-bottom-left-radius:4px}
+    .sender{font-size:9px;color:var(--green2);font-weight:800;margin-bottom:3px}
+    .text{font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere}
+    .meta{font-size:9px;color:#7e8582;text-align:right;margin-top:4px;display:flex;justify-content:flex-end;gap:4px;align-items:center}
+    .reply{border-left:3px solid var(--green2);background:#00000009;border-radius:5px;padding:5px 7px;margin-bottom:6px;font-size:11px;color:#555;max-height:48px;overflow:hidden}
+    .media{display:block;max-width:100%;border-radius:10px;margin:4px 0;cursor:zoom-in}
+    audio{width:100%;max-width:290px;height:34px}
+    .reactions{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+    .reaction{border:1px solid #0001;background:#fff9;border-radius:10px;padding:2px 6px;font-size:11px;cursor:pointer}
+    .msg-menu{position:absolute;right:5px;top:5px;width:24px;height:24px;border-radius:50%;background:#fff9;color:#666;cursor:pointer;opacity:.35}
+    .bubble:hover .msg-menu{opacity:1}
+    .menu{position:absolute;right:5px;top:30px;background:white;border:1px solid #ddd;border-radius:12px;box-shadow:0 10px 30px #0003;z-index:10;min-width:155px;overflow:hidden}
+    .menu button{display:block;width:100%;padding:10px 12px;text-align:left;background:white;cursor:pointer;font-size:12px}
+    .menu button:hover{background:#f2f4f3}
+    .replybar{background:#e2e6e3;border-left:4px solid var(--green2);margin:0 10px 4px;padding:7px 9px;display:flex;justify-content:space-between;align-items:center;border-radius:8px;font-size:11px}
+    footer{background:#eff0ee;border-top:1px solid var(--line);padding:7px 8px calc(7px + env(safe-area-inset-bottom))}
+    .composer{display:flex;gap:6px;align-items:flex-end}
+    .circle{width:42px;height:42px;border-radius:50%;background:white;color:var(--green2);display:grid;place-items:center;box-shadow:0 1px 4px #0001;cursor:pointer;flex:none}
+    .send{background:#0b9b7e;color:white}
+    .input-wrap{flex:1;background:white;border-radius:17px;border:1px solid #ddd;min-height:42px;display:flex;align-items:center;padding:2px 8px}
+    textarea{width:100%;border:0;outline:0;resize:none;max-height:120px;padding:8px 4px;background:transparent}
+    .emoji-panel{display:grid;grid-template-columns:repeat(8,1fr);gap:3px;padding:8px;background:#f8f8f7;border-top:1px solid var(--line);max-height:170px;overflow:auto}
+    .emoji-panel button{background:transparent;padding:7px;font-size:21px;border-radius:8px;cursor:pointer}
+    .modal{position:absolute;inset:0;background:#0008;z-index:50;display:grid;place-items:center;padding:20px}
+    .modal-card{background:white;color:var(--ink);width:min(100%,420px);border-radius:20px;padding:20px;box-shadow:0 20px 60px #0005}
+    .modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+    .setting{display:flex;justify-content:space-between;gap:20px;align-items:center;padding:12px 0;border-bottom:1px solid #eee;font-size:13px}
+    .switch{appearance:none;width:42px;height:24px;background:#bbb;border-radius:20px;position:relative;cursor:pointer}
+    .switch:checked{background:#0b9b7e}
+    .switch:after{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;border-radius:50%;background:white;transition:.15s}
+    .switch:checked:after{left:21px}
+    .panic{position:absolute;inset:0;z-index:100;background:#fff;color:#222;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;display:flex;flex-direction:column}
+    .panicbar{background:#efefef;border-bottom:1px solid #ccc;padding:4px 8px;font-size:11px;display:flex;gap:16px}
+    .panic textarea{flex:1;padding:10px;border:0;resize:none;outline:0;font-family:inherit}
+    .toast{position:absolute;left:50%;bottom:85px;transform:translateX(-50%);background:#222;color:#fff;padding:8px 12px;border-radius:10px;font-size:12px;z-index:80;opacity:.95}
+    .lock{position:absolute;inset:0;z-index:90;background:linear-gradient(145deg,#092f29,#0e5c50);display:grid;place-items:center;color:white;padding:20px}
+    .pin-dots{display:flex;justify-content:center;gap:10px;margin:18px 0}
+    .dot{width:12px;height:12px;border:1px solid #fff8;border-radius:50%}.dot.on{background:white}
+    .pinpad{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;width:min(280px,100%)}
+    .pinpad button{height:54px;border-radius:15px;background:#ffffff13;color:#fff;font-size:20px;cursor:pointer}
+    @media(min-width:760px){.app{height:95vh;border-radius:14px;margin:2.5vh auto}.bubble{max-width:70%}}
+  </style>
 </head>
 <body>
-
-    <div class="main-app-container">
-        <!-- Interface de Segurança -->
-        <div id="panic-screen" class="hidden">
-            <div class="notepad-header">
-                <span>Ficheiro</span><span>Editar</span><span>Formatar</span><span>Ver</span>
-                <span onclick="togglePanicMode()" style="cursor: pointer; opacity: 0.5;"><i class="fas fa-cog"></i></span>
-            </div>
-            <textarea id="panic-textarea" class="flex-1 p-2 border-none outline-none resize-none font-mono text-sm" placeholder="Notas de sistema..."></textarea>
-        </div>
-
-        <!-- Ecrã de Entrada -->
-        <div id="login-screen">
-            <div class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-[340px] text-center">
-                <h1 class="text-3xl font-bold text-teal-800 mb-1">Em Pauta</h1>
-                <p class="text-gray-400 text-xs mb-6 uppercase tracking-widest">Acesso Restrito</p>
-                <input type="password" id="pass-input" placeholder="Palavra-passe" class="w-full p-4 bg-gray-100 rounded-xl mb-4 text-center text-xl outline-none border border-transparent focus:border-teal-500">
-                <input type="text" id="nick-input" placeholder="O seu apelido" class="w-full p-4 bg-gray-100 rounded-xl mb-6 text-center outline-none border border-transparent focus:border-teal-500">
-                <button onclick="attemptLogin()" class="w-full bg-teal-700 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 hover:bg-teal-800">ENTRAR NO CHAT</button>
-                <p id="status-text" class="text-[10px] mt-4 text-gray-400 italic">A estabelecer ligação...</p>
-            </div>
-        </div>
-
-        <!-- Interface de Chat -->
-        <div id="chat-app" class="hidden flex flex-col h-full">
-            <header id="app-header" class="bg-[#075e54] text-white p-4 flex flex-col shadow-lg shrink-0 transition-colors duration-300">
-                <div class="flex justify-between items-center w-full">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 bg-teal-600 rounded-full flex items-center justify-center shadow-inner"><i class="fas fa-paper-plane text-white text-sm"></i></div>
-                        <div>
-                            <h1 class="font-bold leading-none text-md">Em Pauta</h1>
-                            <div id="system-status"></div>
-                        </div>
-                    </div>
-                    <div class="flex gap-1">
-                        <button id="notif-btn" onclick="requestNotificationPermission()" title="Ativar Notificações" class="p-2 hover:bg-black/10 rounded-full transition text-blue-300 relative"><i class="fas fa-bell"></i></button>
-                        <button onclick="togglePanicMode()" title="Modo Segurança" class="p-2 hover:bg-black/10 rounded-full transition text-yellow-300"><i class="fas fa-shield-alt"></i></button>
-                        <button onclick="clearGlobalChat()" title="Limpar Chat Definitivamente" class="p-2 hover:bg-black/10 rounded-full transition text-orange-300"><i class="fas fa-broom"></i></button>
-                        <button onclick="toggleSearch()" class="p-2 hover:bg-black/10 rounded-full transition"><i class="fas fa-search"></i></button>
-                        <button onclick="logout()" class="p-2 hover:bg-black/10 rounded-full transition text-red-300"><i class="fas fa-sign-out-alt"></i></button>
-                    </div>
-                </div>
-                <div id="search-bar" class="hidden mt-3">
-                    <input type="text" id="search-input" oninput="render()" placeholder="Pesquisar..." class="w-full p-2 rounded-lg bg-black/20 border-none outline-none text-sm placeholder:text-teal-200 text-white">
-                </div>
-            </header>
-
-            <div id="pinned-bar" class="hidden" onclick="scrollToPinned()">
-                <i class="fas fa-thumbtack fa-sm"></i>
-                <div class="flex-1 truncate overflow-hidden">
-                    <span id="pinned-text" class="text-gray-600">Nenhuma mensagem fixada.</span>
-                </div>
-                <button onclick="unpinMessage(event)" class="text-gray-400 hover:text-red-500 px-2">&times;</button>
-            </div>
-
-            <main id="chat-box" class="chat-area"></main>
-
-            <footer class="shrink-0">
-                <div id="reply-bar" class="hidden bg-gray-200 p-2 border-l-4 border-teal-700 mx-4 mt-2 rounded-lg flex justify-between items-center animate-pulse">
-                    <div class="px-2 overflow-hidden"><p class="text-[9px] font-bold text-teal-700 uppercase">A responder a</p><p id="reply-preview-text" class="text-xs text-gray-600 truncate italic"></p></div>
-                    <button onclick="cancelReply()" class="text-red-500 p-2">&times;</button>
-                </div>
-
-                <div class="p-3 flex items-center gap-2">
-                    <!-- Esquerda: Anexo e Emojis -->
-                    <div class="flex items-center gap-1">
-                        <input type="file" id="file-input" class="hidden" accept="image/*" onchange="handleFileSelect(this)">
-                        <button onclick="document.getElementById('file-input').click()" class="w-10 h-10 bg-white text-teal-600 rounded-full shadow flex items-center justify-center hover:scale-105 transition" title="Anexar">
-                            <i class="fas fa-paperclip text-lg"></i>
-                        </button>
-                        <button onclick="toggleEmojis()" class="w-10 h-10 bg-white text-gray-400 rounded-full shadow flex items-center justify-center hover:text-teal-600 transition" title="Emojis">
-                            <i class="far fa-smile text-xl"></i>
-                        </button>
-                    </div>
-
-                    <!-- Centro: Caixa de Texto -->
-                    <div class="flex-1 bg-white rounded-2xl shadow-sm p-1 flex flex-col border border-gray-200">
-                        <textarea id="msg-input" placeholder="Mensagem" rows="1" class="w-full p-2 outline-none resize-none text-sm bg-transparent max-h-32"></textarea>
-                    </div>
-
-                    <!-- Direita: Voz e Enviar -->
-                    <div class="flex items-center gap-1">
-                        <button id="voice-btn" onclick="toggleVoiceRecord()" class="w-10 h-10 bg-white text-gray-400 rounded-full shadow flex items-center justify-center hover:text-teal-600 transition" title="Gravar Voz">
-                            <i class="fas fa-microphone text-lg"></i>
-                        </button>
-                        <button id="send-btn" onclick="doSendMessage()" class="w-10 h-10 bg-[#00a884] text-white rounded-full shadow-lg flex items-center justify-center active:scale-90 hover:bg-[#008f72] transition-all" title="Enviar">
-                            <i class="fas fa-paper-plane text-lg"></i>
-                        </button>
-                    </div>
-                </div>
-                <div id="emoji-box" class="hidden grid grid-cols-6 gap-2 pb-4 px-4 bg-gray-50"></div>
-            </footer>
-        </div>
+<div class="app" id="app">
+  <section class="screen" id="authScreen">
+    <div class="card">
+      <div class="brand">Em Pauta</div>
+      <div class="sub">comunicador privado</div>
+      <form id="authForm">
+        <input class="field" id="email" type="email" autocomplete="username" placeholder="E-mail" required>
+        <input class="field" id="password" type="password" autocomplete="current-password" placeholder="Senha" required>
+        <input class="field" id="nickname" type="text" maxlength="40" placeholder="Nome/apelido deste dispositivo" required>
+        <button class="primary" type="submit">Entrar</button>
+        <div class="error" id="authError"></div>
+      </form>
+      <p class="tiny">A autenticação é feita pelo Firebase. A senha não fica no código do aplicativo. Depois do login, a chave privada de criptografia é mantida no armazenamento seguro do navegador.</p>
     </div>
+  </section>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, arrayUnion, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+  <header id="header" class="hidden">
+    <div class="head-left">
+      <div class="avatar" id="myAvatar">EP</div>
+      <div>
+        <div class="head-name">Conversa privada</div>
+        <div class="head-status" id="status">A iniciar sessão segura…</div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="icon" id="searchBtn" title="Pesquisar">⌕</button>
+      <button class="icon" id="panicBtn" title="Disfarçar">▣</button>
+      <button class="icon" id="settingsBtn" title="Configurações">⋮</button>
+    </div>
+  </header>
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyASQkgnQkeKjXKrmT3yMV9zcUVxec3NvrA",
-            authDomain: "em-pauta-d6e92.firebaseapp.com",
-            projectId: "em-pauta-d6e92",
-            storageBucket: "em-pauta-d6e92.firebasestorage.app",
-            messagingSenderId: "94994518950",
-            appId: "1:94994518950:web:e60bb5bc83558752f47567"
-        };
+  <div id="searchBar" class="search hidden"><input id="searchInput" type="search" placeholder="Pesquisar na conversa…"></div>
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appIdSlug = "em-pauta-main"; 
-        const MASTER_PASS = "2407";
+  <div id="pinned" class="pinned hidden"></div>
+  <main id="chat" class="chat"></main>
 
-        let myNick = localStorage.getItem('empauta_nick_vfinal') || "";
-        let replyTarget = null;
-        let allMessages = [];
-        let filterIndex = 0;
-        let lastRenderedHash = "";
-        let typingTimeout = null;
-        let alertInterval = null;
-        const originalTitle = "Em Pauta - Pro";
+  <div id="replyBar" class="replybar hidden"><span id="replyText"></span><button id="cancelReply" class="secondary">×</button></div>
 
-        let mediaRecorder;
-        let audioChunks = [];
-        let isRecording = false;
+  <footer id="footer" class="hidden">
+    <div id="emojiPanel" class="emoji-panel hidden"></div>
+    <div class="composer">
+      <input id="fileInput" type="file" class="hidden" accept="image/*,audio/*">
+      <button class="circle" id="attachBtn" title="Anexar">＋</button>
+      <div class="input-wrap"><textarea id="messageInput" rows="1" maxlength="10000" placeholder="Mensagem"></textarea></div>
+      <button class="circle" id="emojiBtn" title="Emojis">☺</button>
+      <button class="circle send" id="sendBtn" title="Enviar">➤</button>
+    </div>
+  </footer>
 
-        const notificationSound = new Audio("https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3");
-        
-        const emojiList = [
-            "😊", "😂", "🤣", "😍", "😒", "😭", "😱", "😴", "🤮", "😎", 
-            "🤔", "🤨", "🙄", "🤫", "🤥", "🤡", "💩", "👻", "👽", "👾",
-            "❤️", "🔥", "👍", "👎", "🙌", "👏", "🙏", "💪", "👊", "✊",
-            "✅", "⚠️", "❌", "🚫", "💯", "💢", "💎", "💰", "💡", "🔔",
-            "☕", "🍺", "🎉", "🚀", "📱", "💻", "💼", "📅", "📍", "🔒"
-        ];
+  <section id="settingsModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head"><strong>Privacidade</strong><button class="secondary" id="closeSettings">Fechar</button></div>
+      <div class="setting"><span>Bloquear automaticamente</span><input id="autoLock" class="switch" type="checkbox"></div>
+      <div class="setting"><span>Notificações sem conteúdo</span><input id="safeNotifications" class="switch" type="checkbox" checked></div>
+      <div class="setting"><span>Mensagens temporárias</span><select id="ttl" class="field" style="width:auto;margin:0"><option value="0">Nunca</option><option value="3600">1 hora</option><option value="21600">6 horas</option><option value="86400">24 horas</option><option value="604800">7 dias</option></select></div>
+      <div class="setting"><span>Modo disfarce</span><button class="secondary" id="hideNow">Ativar agora</button></div>
+      <div style="margin-top:14px"><button class="primary" id="logoutBtn">Sair deste dispositivo</button></div>
+      <p class="tiny" style="margin-top:12px">Importante: esta versão usa ECDH P-256 + HKDF-SHA-256 + AES-256-GCM para cifrar o conteúdo antes do Firebase. Isso protege o conteúdo armazenado e em trânsito, mas não transforma um celular comprometido em um ambiente confiável.</p>
+    </div>
+  </section>
 
-        const userColors = {};
-        const getUserColor = (nick) => {
-            if (!userColors[nick]) {
-                const colors = ['#e67e22', '#3498db', '#9b59b6', '#2ecc71', '#e74c3c', '#1abc9c', '#f1c40f'];
-                userColors[nick] = colors[Math.floor(Math.random() * colors.length)];
-            }
-            return userColors[nick];
-        };
+  <section id="lockScreen" class="lock hidden">
+    <div style="text-align:center;width:min(320px,100%)">
+      <div style="font-size:42px">🔒</div>
+      <h2 style="margin:5px 0">Sessão bloqueada</h2>
+      <div class="tiny" style="color:#cce3de">Digite o PIN deste dispositivo</div>
+      <div class="pin-dots" id="pinDots"></div>
+      <div class="pinpad" id="pinpad"></div>
+      <button id="biometricBtn" class="secondary" style="margin-top:12px;width:100%">Usar biometria, se disponível</button>
+    </div>
+  </section>
 
-        // --- SISTEMA DE PRESENÇA E STATUS ---
-        const updateMyStatus = async (isTyping = false) => {
-            if (!auth.currentUser || !myNick) return;
-            const statusRef = doc(db, 'artifacts', appIdSlug, 'public', 'data', 'status', auth.currentUser.uid);
-            try {
-                await setDoc(statusRef, { nick: myNick, lastActive: serverTimestamp(), isTyping: isTyping }, { merge: true });
-            } catch (e) { if (e.code !== 'permission-denied') console.error(e); }
-        };
+  <section id="panicScreen" class="panic hidden">
+    <div class="panicbar"><span>Ficheiro</span><span>Editar</span><span>Formatar</span><span>Ver</span><span id="panicUnlock" style="margin-left:auto;cursor:pointer">•••</span></div>
+    <textarea id="panicText" placeholder="Notas..."></textarea>
+  </section>
 
-        const listenToOthersStatus = () => {
-            if (!auth.currentUser) return;
-            onSnapshot(collection(db, 'artifacts', appIdSlug, 'public', 'data', 'status'), (snap) => {
-                let activeUsers = []; let typingUser = null; const now = Date.now();
-                snap.forEach(d => {
-                    const data = d.data(); if (d.id === auth.currentUser?.uid) return;
-                    const lastActive = data.lastActive?.seconds * 1000 || 0;
-                    if (now - lastActive < 60000) { activeUsers.push(data.nick); if (data.isTyping) typingUser = data.nick; }
-                });
-                const statusEl = document.getElementById('system-status');
-                if (statusEl) {
-                    if (typingUser) { statusEl.innerText = `${typingUser} está a escrever...`; statusEl.style.color = "#2ecc71"; }
-                    else if (activeUsers.length > 0) { statusEl.innerText = `${activeUsers.join(', ')} online`; statusEl.style.color = "#b2d8d2"; }
-                    else { statusEl.innerText = ""; }
-                }
-            });
-        };
+  <div id="toast" class="toast hidden"></div>
+</div>
 
-        const listenPinned = () => {
-            onSnapshot(doc(db, 'artifacts', appIdSlug, 'public', 'data', 'settings', 'pinned'), (docSnap) => {
-                const bar = document.getElementById('pinned-bar');
-                if (docSnap.exists() && docSnap.data().text) {
-                    bar.classList.remove('hidden');
-                    document.getElementById('pinned-text').innerText = docSnap.data().text;
-                    bar.dataset.msgId = docSnap.data().msgId;
-                } else { bar.classList.add('hidden'); }
-            });
-        };
-
-        window.pinMessage = async (id, text) => {
-            await setDoc(doc(db, 'artifacts', appIdSlug, 'public', 'data', 'settings', 'pinned'), {
-                text: text || "[Mídia]", msgId: id, pinnedBy: myNick
-            });
-        };
-
-        window.unpinMessage = async (e) => {
-            e.stopPropagation();
-            await setDoc(doc(db, 'artifacts', appIdSlug, 'public', 'data', 'settings', 'pinned'), { text: null });
-        };
-
-        window.scrollToPinned = () => {
-            const id = document.getElementById('pinned-bar').dataset.msgId;
-            const el = document.getElementById(`msg-${id}`);
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        };
-
-        // --- VOZ ---
-        window.toggleVoiceRecord = async () => {
-            if (!isRecording) {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    mediaRecorder = new MediaRecorder(stream);
-                    audioChunks = [];
-                    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-                    mediaRecorder.onstop = async () => {
-                        const audioBlob = new Blob(audioChunks, { type: 'audio/mpeg' });
-                        const reader = new FileReader();
-                        reader.readAsDataURL(audioBlob);
-                        reader.onloadend = () => {
-                            window.selectedFile = { data: reader.result, type: 'audio' };
-                            window.doSendMessage();
-                        };
-                    };
-                    mediaRecorder.start();
-                    isRecording = true;
-                    document.getElementById('voice-btn').classList.add('recording-active');
-                } catch (e) { alert("Sem acesso ao microfone."); }
-            } else {
-                mediaRecorder.stop();
-                isRecording = false;
-                document.getElementById('voice-btn').classList.remove('recording-active');
-            }
-        };
-
-        setInterval(() => { if(auth.currentUser && myNick) updateMyStatus(false); }, 30000);
-
-        const triggerAlerts = (sender) => {
-            if (!document.getElementById('panic-screen').classList.contains('hidden')) return;
-            notificationSound.play().catch(() => {});
-            if (document.hidden) {
-                if (!alertInterval) alertInterval = setInterval(() => { document.title = document.title === originalTitle ? "🔴 NOVA MENSAGEM!" : originalTitle; }, 1000);
-                if (Notification.permission === "granted") new Notification("Em Pauta", { body: "Nova mensagem recebida", icon: "https://cdn-icons-png.flaticon.com/512/733/733585.png", tag: "msg" });
-            }
-        };
-
-        window.addEventListener('focus', () => { 
-            if (alertInterval) { clearInterval(alertInterval); alertInterval = null; document.title = originalTitle; }
-            markRead(); 
-        });
-
-        // --- MENU E AÇÕES ---
-        window.toggleMsgMenu = (id) => {
-            document.querySelectorAll('.msg-dropdown').forEach(m => m.id !== `menu-${id}` && m.classList.add('hidden'));
-            document.getElementById(`menu-${id}`)?.classList.toggle('hidden');
-            event.stopPropagation();
-        };
-
-        window.copyMsg = (text) => { navigator.clipboard?.writeText(text); alert("Copiado!"); };
-        window.startReply = (id) => {
-            const m = allMessages.find(msg => msg.id === id);
-            replyTarget = { sender: m.sender, text: m.text || "[Mídia]" };
-            document.getElementById('reply-preview-text').innerText = `${m.sender}: ${replyTarget.text}`;
-            document.getElementById('reply-bar')?.classList.remove('hidden');
-            document.getElementById('msg-input')?.focus();
-        };
-
-        window.addReaction = async (id, emoji) => {
-            const msg = allMessages.find(m => m.id === id);
-            if (!msg) return;
-            const reactions = msg.reactions || {};
-            reactions[emoji] = (reactions[emoji] || 0) + 1;
-            await updateDoc(doc(db, 'artifacts', appIdSlug, 'public', 'data', 'messages', id), { reactions });
-        };
-
-        window.editMsg = async (id, currentText) => {
-            const newText = prompt("Editar:", currentText);
-            if (newText && newText !== currentText) await updateDoc(doc(db, 'artifacts', appIdSlug, 'public', 'data', 'messages', id), { text: newText + " (editada)" });
-        };
-
-        window.deleteMsg = async (id) => { if(confirm("Apagar para todos?")) await deleteDoc(doc(db, 'artifacts', appIdSlug, 'public', 'data', 'messages', id)); };
-
-        window.clearGlobalChat = async () => {
-            if (confirm("Apagar TUDO do histórico permanentemente?")) {
-                for (const m of allMessages) await deleteDoc(doc(db, 'artifacts', appIdSlug, 'public', 'data', 'messages', m.id));
-                alert("Base de dados limpa!");
-            }
-        };
-
-        // --- APP FLOW ---
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                const st = document.getElementById('status-text');
-                if (st) st.innerText = "Ligação estável.";
-                if (myNick) startChatSession();
-            }
-        });
-
-        const initAuth = async () => { try { await signInAnonymously(auth); } catch (e) { console.error(e); } };
-        initAuth();
-
-        window.attemptLogin = async () => {
-            const nick = document.getElementById('nick-input')?.value.trim();
-            const pass = document.getElementById('pass-input')?.value;
-            if (pass === MASTER_PASS && nick) {
-                myNick = nick; localStorage.setItem('empauta_nick_vfinal', nick);
-                if ("Notification" in window) Notification.requestPermission();
-                startChatSession();
-            } else { alert("Acesso Negado."); }
-        };
-
-        const startChatSession = () => {
-            if (!auth.currentUser) return;
-            document.getElementById('login-screen')?.classList.add('hidden');
-            document.getElementById('chat-app')?.classList.remove('hidden');
-            updateMyStatus(false);
-            listenToOthersStatus();
-            listenPinned();
-            startListening();
-        };
-
-        const startListening = () => {
-            onSnapshot(collection(db, 'artifacts', appIdSlug, 'public', 'data', 'messages'), (snap) => {
-                const list = []; snap.forEach(d => list.push({ id: d.id, ...d.data() }));
-                const oldLen = allMessages.length;
-                allMessages = list.sort((a,b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
-                if (allMessages.length > oldLen && oldLen > 0 && allMessages[allMessages.length-1].sender !== myNick) triggerAlerts(allMessages[allMessages.length-1].sender);
-                render();
-                if(!document.hidden) markRead();
-            });
-        };
-
-        const markRead = () => {
-            if (!auth.currentUser) return;
-            allMessages.forEach(m => {
-                if (m.uid !== auth.currentUser.uid && (!m.seenBy || !m.seenBy.includes(auth.currentUser.uid))) {
-                    updateDoc(doc(db, 'artifacts', appIdSlug, 'public', 'data', 'messages', m.id), { seenBy: arrayUnion(auth.currentUser.uid) }).catch(()=>{});
-                }
-            });
-        };
-
-        window.render = () => {
-            const box = document.getElementById('chat-box'); if (!box) return;
-            const search = (document.getElementById('search-input')?.value || "").toLowerCase();
-            const visible = allMessages.filter(m => (m.text||"").toLowerCase().includes(search) || m.sender.toLowerCase().includes(search));
-            const hash = JSON.stringify(visible.map(m=>m.id+JSON.stringify(m.reactions)+m.seenBy?.length));
-            if(hash === lastRenderedHash) return; lastRenderedHash = hash;
-
-            box.innerHTML = "";
-            visible.forEach(m => {
-                const isMe = m.sender === myNick;
-                const initials = m.sender.substring(0, 2).toUpperCase();
-                const color = getUserColor(m.sender);
-                const wrapper = document.createElement('div');
-                wrapper.id = `msg-${m.id}`;
-                wrapper.className = `bubble-wrapper ${isMe ? 'my-wrapper' : ''}`;
-                
-                let menuBtn = `
-                    <button onclick="toggleMsgMenu('${m.id}')" class="msg-menu-btn"><i class="fas fa-chevron-down"></i></button>
-                    <div id="menu-${m.id}" class="msg-dropdown hidden ${isMe?'menu-right':'menu-left'}">
-                        <div class="react-tray">
-                            <span onclick="addReaction('${m.id}','❤️')">❤️</span>
-                            <span onclick="addReaction('${m.id}','👍')">👍</span>
-                            <span onclick="addReaction('${m.id}','🔥')">🔥</span>
-                        </div>
-                        <button onclick="startReply('${m.id}')"><i class="fas fa-reply fa-xs"></i> Responder</button>
-                        <button onclick="pinMessage('${m.id}', '${m.text}')"><i class="fas fa-thumbtack fa-xs"></i> Fixar</button>
-                        <button onclick="copyMsg('${m.text}')"><i class="fas fa-copy fa-xs"></i> Copiar</button>
-                        ${isMe ? `<button onclick="editMsg('${m.id}', '${m.text}')" class="text-blue-500"><i class="fas fa-edit fa-xs"></i> Editar</button>` : ''}
-                        <button onclick="deleteMsg('${m.id}')" class="text-red-500"><i class="fas fa-trash fa-xs"></i> Excluir</button>
-                    </div>
-                `;
-
-                const reactions = m.reactions && Object.keys(m.reactions).length > 0 ? `<div class="reactions-container">${Object.entries(m.reactions).map(([e, c])=>`<span class="reaction-badge">${e} ${c}</span>`).join('')}</div>` : "";
-                const status = isMe ? `<span class="read-status"><i class="fas ${m.seenBy?.length?'fa-check-double':'fa-check'}" style="color: ${m.seenBy?.length?'#34b7f1':'#8696a0'}"></i></span>` : "";
-                
-                let mediaHtml = m.fileData ? (m.fileData.includes('audio') ? `<audio controls class="msg-audio mt-2 h-8 w-full"><source src="${m.fileData}" type="audio/mpeg"></audio>` : `<img src="${m.fileData}" class="msg-image" onclick="window.open(this.src)" />`) : "";
-
-                wrapper.innerHTML = `
-                    <div class="avatar" style="background: ${color}">${initials}</div>
-                    <div class="bubble ${isMe ? 'my-msg' : 'other-msg'}">
-                        ${menuBtn}
-                        <div class="text-[9px] font-bold text-teal-800 uppercase mb-1 opacity-70 pr-4">${m.sender}</div>
-                        ${m.reply ? `<div class="reply-tag">${m.reply}</div>` : ""}
-                        ${mediaHtml}
-                        <div class="text-sm break-words whitespace-pre-wrap">${m.text || ""}</div>
-                        ${reactions}
-                        <div class="text-[8px] text-gray-400 text-right mt-1 flex items-center justify-end">
-                            ${m.timestamp ? new Date(m.timestamp.seconds*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '...'} ${status}
-                        </div>
-                    </div>
-                `;
-                box.appendChild(wrapper);
-            });
-            box.scrollTop = box.scrollHeight;
-        };
-
-        window.doSendMessage = async () => {
-            const input = document.getElementById('msg-input');
-            const file = window.selectedFile;
-            if(!input?.value.trim() && !file) return;
-            const payload = { sender: myNick, text: input.value.trim(), reply: replyTarget?`${replyTarget.sender}: ${replyTarget.text}`:null, fileData: file?.data||null, timestamp: serverTimestamp(), uid: auth.currentUser.uid, seenBy: [], reactions: {} };
-            input.value = ""; window.selectedFile = null; document.getElementById('reply-bar')?.classList.add('hidden'); replyTarget = null;
-            document.getElementById('send-btn').innerHTML = '<i class="fas fa-paper-plane text-lg"></i>';
-            await addDoc(collection(db, 'artifacts', appIdSlug, 'public', 'data', 'messages'), payload);
-            updateMyStatus(false);
-        };
-
-        document.getElementById('msg-input')?.addEventListener('input', () => {
-            updateMyStatus(true); clearTimeout(typingTimeout);
-            typingTimeout = setTimeout(() => updateMyStatus(false), 3000);
-        });
-
-        window.handleFileSelect = (input) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                document.getElementById('send-btn').innerHTML = '<i class="fas fa-check text-green-400"></i>';
-                window.selectedFile = { data: e.target.result };
-            };
-            reader.readAsDataURL(input.files[0]);
-        };
-
-        window.togglePanicMode = () => {
-            const p = document.getElementById('panic-screen');
-            if (p.classList.contains('hidden')) { p.classList.remove('hidden'); document.getElementById('panic-textarea').focus(); }
-            else if (prompt("Segurança:") === MASTER_PASS) p.classList.add('hidden');
-        };
-
-        window.toggleSearch = () => document.getElementById('search-bar').classList.toggle('hidden');
-        
-        window.toggleEmojis = () => {
-            const eb = document.getElementById('emoji-box'); 
-            eb.classList.toggle('hidden');
-            if(!eb.classList.contains('hidden')) {
-                eb.innerHTML = emojiList.map(e => `
-                    <button onclick="insertEmojiAtCursor('${e}')" class="text-2xl p-2 hover:bg-gray-100 rounded-lg transition">${e}</button>
-                `).join('');
-            }
-        };
-
-        window.insertEmojiAtCursor = (e) => {
-            const input = document.getElementById('msg-input');
-            input.value += e;
-            input.focus();
-        };
-
-        window.logout = () => { localStorage.removeItem('empauta_nick_vfinal'); location.reload(); };
-        window.onclick = () => {
-            document.querySelectorAll('.msg-dropdown').forEach(m => m.classList.add('hidden'));
-        };
-        window.cancelReply = () => { replyTarget = null; document.getElementById('reply-bar')?.classList.add('hidden'); };
-        document.getElementById('msg-input')?.addEventListener('keydown', (e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); window.doSendMessage(); } });
-    </script>
+<script type="module" src="./js/app.js"></script>
 </body>
 </html>
