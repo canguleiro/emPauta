@@ -1,0 +1,25 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAuthorized() {
+      return request.auth != null
+        && (
+          request.auth.uid == "SntSaG8ImRg3pbjAmC6pGqESCLH3"
+          || request.auth.uid == "tWliIiH06KhVgEg4zqIZo5IeLyZ2"
+        );
+    }
+
+    match /private/private-room/media/{fileName} {
+      allow read: if isAuthorized();
+      allow write: if isAuthorized()
+        && request.resource.size < 8 * 1024 * 1024
+        && request.resource.contentType == 'application/octet-stream';
+      allow delete: if isAuthorized();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
