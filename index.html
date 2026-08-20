@@ -10,85 +10,8 @@
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <title>Notas</title>
-  <style>
-    :root{--bg:#e8e5df;--panel:#f7f7f5;--ink:#18201d;--muted:#6e7773;--green:#0b3d35;--green2:#0e6a5b;--mine:#d8f4e5;--other:#fff;--danger:#b42318;--line:#d8d9d6}
-    *{box-sizing:border-box}
-    html,body{height:100%;margin:0}
-    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#d2d6d4;color:var(--ink);overflow:hidden}
-    button,input,textarea{font:inherit}
-    button{border:0}
-    .app{width:100%;height:100%;max-width:620px;margin:auto;background:var(--bg);position:relative;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 0 30px #0002}
-    .screen{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(145deg,#0b3d35,#126b5c);color:white}
-    .card{width:min(100%,380px);background:white;color:var(--ink);border-radius:24px;padding:28px;box-shadow:0 20px 60px #0004}
-    .brand{font-weight:800;font-size:27px;letter-spacing:-.04em}
-    .sub{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:#8b9490;margin:5px 0 22px}
-    .field{width:100%;padding:14px 15px;border:1px solid var(--line);border-radius:14px;outline:none;margin:6px 0;background:#fafafa}
-    .field:focus{border-color:#2b8978;box-shadow:0 0 0 3px #2b897822}
-    .primary{width:100%;padding:14px;border-radius:14px;background:var(--green);color:white;font-weight:750;cursor:pointer}
-    .secondary{padding:10px 12px;border-radius:12px;background:#eef1ef;color:var(--green);cursor:pointer}
-    .tiny{font-size:11px;color:#737b77;line-height:1.45}
-    .error{color:var(--danger);font-size:12px;min-height:18px;margin-top:8px}
-    .hidden{display:none!important}
-    header{background:var(--green);color:#fff;padding:calc(10px + env(safe-area-inset-top)) 12px 10px;display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:68px}
-    .head-left{display:flex;align-items:center;gap:10px;min-width:0}
-    .avatar{width:38px;height:38px;border-radius:50%;background:#ffffff1c;display:grid;place-items:center;font-size:15px;font-weight:800;flex:none}
-    .head-name{font-weight:750;line-height:1.1}
-    .head-status{font-size:11px;color:#b9d8d1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px}
-    .actions{display:flex;gap:2px}
-    .icon{width:38px;height:38px;border-radius:50%;background:transparent;color:#fff;display:grid;place-items:center;cursor:pointer}
-    .icon:hover{background:#ffffff15}
-    .search{padding:8px 12px;background:var(--green)}
-    .search input{width:100%;border:0;outline:0;border-radius:12px;padding:10px 12px;background:#ffffff16;color:white}
-    .search input::placeholder{color:#c6ddd8}
-    .pinned{background:white;border-bottom:1px solid var(--line);padding:8px 12px;display:flex;gap:8px;align-items:center;font-size:12px;cursor:pointer}
-    .chat{flex:1;overflow:auto;padding:12px 10px 10px;display:flex;flex-direction:column;gap:7px;scroll-behavior:smooth}
-    .date-sep{align-self:center;background:#d7d7d2;padding:4px 10px;border-radius:10px;font-size:10px;color:#656b68;margin:8px}
-    .msg-row{display:flex;gap:6px;align-items:flex-end}
-    .msg-row.mine{justify-content:flex-end}
-    .bubble{max-width:min(84%,430px);background:var(--other);border-radius:14px;padding:8px 10px;box-shadow:0 1px 2px #0001;position:relative}
-    .mine .bubble{background:var(--mine);border-bottom-right-radius:4px}
-    .other .bubble{border-bottom-left-radius:4px}
-    .sender{font-size:9px;color:var(--green2);font-weight:800;margin-bottom:3px}
-    .text{font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere}
-    .meta{font-size:9px;color:#7e8582;text-align:right;margin-top:4px;display:flex;justify-content:flex-end;gap:4px;align-items:center}
-    .reply{border-left:3px solid var(--green2);background:#00000009;border-radius:5px;padding:5px 7px;margin-bottom:6px;font-size:11px;color:#555;max-height:48px;overflow:hidden}
-    .media{display:block;max-width:100%;border-radius:10px;margin:4px 0;cursor:zoom-in}
-    audio{width:100%;max-width:290px;height:34px}
-    .reactions{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
-    .reaction{border:1px solid #0001;background:#fff9;border-radius:10px;padding:2px 6px;font-size:11px;cursor:pointer}
-    .msg-menu{position:absolute;right:5px;top:5px;width:24px;height:24px;border-radius:50%;background:#fff9;color:#666;cursor:pointer;opacity:.35}
-    .bubble:hover .msg-menu{opacity:1}
-    .menu{position:absolute;right:5px;top:30px;background:white;border:1px solid #ddd;border-radius:12px;box-shadow:0 10px 30px #0003;z-index:10;min-width:155px;overflow:hidden}
-    .menu button{display:block;width:100%;padding:10px 12px;text-align:left;background:white;cursor:pointer;font-size:12px}
-    .menu button:hover{background:#f2f4f3}
-    .replybar{background:#e2e6e3;border-left:4px solid var(--green2);margin:0 10px 4px;padding:7px 9px;display:flex;justify-content:space-between;align-items:center;border-radius:8px;font-size:11px}
-    footer{background:#eff0ee;border-top:1px solid var(--line);padding:7px 8px calc(7px + env(safe-area-inset-bottom))}
-    .composer{display:flex;gap:6px;align-items:flex-end}
-    .circle{width:42px;height:42px;border-radius:50%;background:white;color:var(--green2);display:grid;place-items:center;box-shadow:0 1px 4px #0001;cursor:pointer;flex:none}
-    .send{background:#0b9b7e;color:white}
-    .input-wrap{flex:1;background:white;border-radius:17px;border:1px solid #ddd;min-height:42px;display:flex;align-items:center;padding:2px 8px}
-    textarea{width:100%;border:0;outline:0;resize:none;max-height:120px;padding:8px 4px;background:transparent}
-    .emoji-panel{display:grid;grid-template-columns:repeat(8,1fr);gap:3px;padding:8px;background:#f8f8f7;border-top:1px solid var(--line);max-height:170px;overflow:auto}
-    .emoji-panel button{background:transparent;padding:7px;font-size:21px;border-radius:8px;cursor:pointer}
-    .modal{position:absolute;inset:0;background:#0008;z-index:50;display:grid;place-items:center;padding:20px}
-    .modal-card{background:white;color:var(--ink);width:min(100%,420px);border-radius:20px;padding:20px;box-shadow:0 20px 60px #0005}
-    .modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
-    .setting{display:flex;justify-content:space-between;gap:20px;align-items:center;padding:12px 0;border-bottom:1px solid #eee;font-size:13px}
-    .switch{appearance:none;width:42px;height:24px;background:#bbb;border-radius:20px;position:relative;cursor:pointer}
-    .switch:checked{background:#0b9b7e}
-    .switch:after{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;border-radius:50%;background:white;transition:.15s}
-    .switch:checked:after{left:21px}
-    .panic{position:absolute;inset:0;z-index:100;background:#fff;color:#222;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;display:flex;flex-direction:column}
-    .panicbar{background:#efefef;border-bottom:1px solid #ccc;padding:4px 8px;font-size:11px;display:flex;gap:16px}
-    .panic textarea{flex:1;padding:10px;border:0;resize:none;outline:0;font-family:inherit}
-    .toast{position:absolute;left:50%;bottom:85px;transform:translateX(-50%);background:#222;color:#fff;padding:8px 12px;border-radius:10px;font-size:12px;z-index:80;opacity:.95}
-    .lock{position:absolute;inset:0;z-index:90;background:linear-gradient(145deg,#092f29,#0e5c50);display:grid;place-items:center;color:white;padding:20px}
-    .pin-dots{display:flex;justify-content:center;gap:10px;margin:18px 0}
-    .dot{width:12px;height:12px;border:1px solid #fff8;border-radius:50%}.dot.on{background:white}
-    .pinpad{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;width:min(280px,100%)}
-    .pinpad button{height:54px;border-radius:15px;background:#ffffff13;color:#fff;font-size:20px;cursor:pointer}
-    @media(min-width:760px){.app{height:95vh;border-radius:14px;margin:2.5vh auto}.bubble{max-width:70%}}
-  </style>
+  <link rel="stylesheet" href="./css/app.css">
+
 </head>
 <body>
 <div class="app" id="app">
@@ -145,26 +68,26 @@
       <div class="modal-head"><strong>Privacidade</strong><button class="secondary" id="closeSettings">Fechar</button></div>
       <div class="setting"><span>Bloquear automaticamente</span><input id="autoLock" class="switch" type="checkbox"></div>
       <div class="setting"><span>Notificações sem conteúdo</span><input id="safeNotifications" class="switch" type="checkbox" checked></div>
-      <div class="setting"><span>Mensagens temporárias</span><select id="ttl" class="field" style="width:auto;margin:0"><option value="0">Nunca</option><option value="3600">1 hora</option><option value="21600">6 horas</option><option value="86400">24 horas</option><option value="604800">7 dias</option></select></div>
+      <div class="setting"><span>Mensagens temporárias</span><select id="ttl" class="field field-auto"><option value="0">Nunca</option><option value="3600">1 hora</option><option value="21600">6 horas</option><option value="86400">24 horas</option><option value="604800">7 dias</option></select></div>
       <div class="setting"><span>Modo disfarce</span><button class="secondary" id="hideNow">Ativar agora</button></div>
-      <div style="margin-top:14px"><button class="primary" id="logoutBtn">Sair deste dispositivo</button></div>
-      <p class="tiny" style="margin-top:12px">Importante: esta versão usa ECDH P-256 + HKDF-SHA-256 + AES-256-GCM para cifrar o conteúdo antes do Firebase. Isso protege o conteúdo armazenado e em trânsito, mas não transforma um celular comprometido em um ambiente confiável.</p>
+      <div class="settings-action"><button class="primary" id="logoutBtn">Sair deste dispositivo</button></div>
+      <p class="tiny settings-note">Importante: esta versão usa ECDH P-256 + HKDF-SHA-256 + AES-256-GCM para cifrar o conteúdo antes do Firebase. Isso protege o conteúdo armazenado e em trânsito, mas não transforma um celular comprometido em um ambiente confiável.</p>
     </div>
   </section>
 
   <section id="lockScreen" class="lock hidden">
-    <div style="text-align:center;width:min(320px,100%)">
-      <div style="font-size:42px">🔒</div>
-      <h2 style="margin:5px 0">Sessão bloqueada</h2>
-      <div class="tiny" style="color:#cce3de">Digite o PIN deste dispositivo</div>
+    <div class="lock-card">
+      <div class="lock-icon">🔒</div>
+      <h2 class="lock-title">Sessão bloqueada</h2>
+      <div class="tiny lock-help">Digite o PIN deste dispositivo</div>
       <div class="pin-dots" id="pinDots"></div>
       <div class="pinpad" id="pinpad"></div>
-      <button id="biometricBtn" class="secondary" style="margin-top:12px;width:100%">Ativar biometria deste dispositivo</button>
+      <button id="biometricBtn" class="secondary biometric-btn">Ativar biometria deste dispositivo</button>
     </div>
   </section>
 
   <section id="panicScreen" class="panic hidden">
-    <div class="panicbar"><span>Ficheiro</span><span>Editar</span><span>Formatar</span><span>Ver</span><span id="panicUnlock" style="margin-left:auto;cursor:pointer">•••</span></div>
+    <div class="panicbar"><span>Ficheiro</span><span>Editar</span><span>Formatar</span><span>Ver</span><span id="panicUnlock" class="panic-unlock">•••</span></div>
     <textarea id="panicText" placeholder="Notas..."></textarea>
   </section>
 
