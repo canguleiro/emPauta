@@ -95,7 +95,7 @@
   <section class="screen" id="authScreen">
     <div class="card">
       <div class="brand">Em Pauta</div>
-      <div class="sub">comunicador privado</div>
+      <div class="sub">notas</div>
       <form id="authForm">
         <input class="field" id="email" type="email" autocomplete="username" placeholder="E-mail" required>
         <input class="field" id="password" type="password" autocomplete="current-password" placeholder="Senha" required>
@@ -103,7 +103,7 @@
         <button class="primary" type="submit">Entrar</button>
         <div class="error" id="authError"></div>
       </form>
-      <p class="tiny">A autenticação é feita pelo Firebase. A senha não fica no código do aplicativo. Depois do login, a chave privada de criptografia é mantida no armazenamento seguro do navegador.</p>
+      <p class="tiny">O acesso usa a conta deste dispositivo. O conteúdo da conversa é cifrado no navegador antes de ser enviado ao Firebase.</p>
     </div>
   </section>
 
@@ -159,7 +159,7 @@
       <div class="tiny" style="color:#cce3de">Digite o PIN deste dispositivo</div>
       <div class="pin-dots" id="pinDots"></div>
       <div class="pinpad" id="pinpad"></div>
-      <button id="biometricBtn" class="secondary" style="margin-top:12px;width:100%">Usar biometria, se disponível</button>
+      <button id="biometricBtn" class="secondary" style="margin-top:12px;width:100%">Ativar biometria deste dispositivo</button>
     </div>
   </section>
 

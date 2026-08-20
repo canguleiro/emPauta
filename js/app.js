@@ -10,7 +10,7 @@ import {
   limit, getDocs, where
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import {
-  getStorage, ref, uploadBytes, getDownloadURL, deleteObject
+  getStorage, ref, uploadBytes, getBytes, deleteObject
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
 const firebaseConfig = {
@@ -27,7 +27,6 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-const ACCESS = doc(db, "private", "access");
 const ROOM_ID = "private-room";
 const MSGS = collection(db, "private", ROOM_ID, "messages");
 const STATUS = collection(db, "private", ROOM_ID, "status");
@@ -54,8 +53,10 @@ let menuOpen = null;
 let searchText = "";
 let selectedFile = null;
 let locked = false;
-let pin = localStorage.getItem("ep_device_pin") || "";
+let pinHash = localStorage.getItem("ep_device_pin_hash") || "";
+let pinSalt = localStorage.getItem("ep_device_pin_salt") || "";
 let pinBuffer = "";
+let pinReady = false;
 let lastActivity = Date.now();
 let lockTimer = null;
 let ttlSeconds = Number(localStorage.getItem("ep_ttl") || "0");
@@ -192,20 +193,19 @@ async function decryptObject(data, otherUid, aadText){
 }
 
 async function getOtherUid(){
-  const ids = [members.uidA, members.uidB].filter(Boolean);
-  return ids.find(x=>x !== me.uid);
+  const ids=[...keyCache.keys()].filter(x=>x!==me.uid);
+  return ids[0] || null;
 }
 
 async function verifyMembership(){
-  const snap = await getDoc(ACCESS);
-  if(!snap.exists()) throw new Error("A configuração de acesso ainda não foi criada.");
-  const d=snap.data();
-  if(![d.uidA,d.uidB].includes(me.uid)) throw new Error("Este usuário não faz parte da conversa privada.");
-  members=d;
+  // A autorização real é feita pelas Firebase Security Rules.
+  // O cliente não precisa conhecer uma lista de UIDs nem de guardar
+  // um documento de acesso legível.
+  if(!me) throw new Error("Sessão não autenticada.");
 }
 
 async function saveStatus(typing=false){
-  if(!me || !members) return;
+  if(!me) return;
   await setDoc(doc(STATUS, me.uid), {
     uid:me.uid, nick:myNick, typing, lastActive:serverTimestamp()
   }, {merge:true}).catch(()=>{});
@@ -214,13 +214,92 @@ async function saveStatus(typing=false){
 function updateActivity(){
   lastActivity=Date.now();
   if(locked) return;
-  if(localStorage.getItem("ep_auto_lock")==="1" && pin && lockTimer===null){
+  if(localStorage.getItem("ep_auto_lock")==="1" && pinReady && lockTimer===null){
     lockTimer=setInterval(()=>{
       if(Date.now()-lastActivity > 5*60*1000) lockApp();
     },15000);
   }
 }
 ["pointerdown","keydown","touchstart"].forEach(ev=>window.addEventListener(ev, updateActivity, {passive:true}));
+
+async function hashPin(value, saltB64){
+  const salt=saltB64?unb64(saltB64):crypto.getRandomValues(new Uint8Array(16));
+  const base=await crypto.subtle.importKey("raw",enc.encode(value),"PBKDF2",false,["deriveBits"]);
+  const bits=await crypto.subtle.deriveBits({name:"PBKDF2",salt,iterations:150000,hash:"SHA-256"},base,256);
+  return {hash:b64(bits),salt:b64(salt)};
+}
+
+async function loadPin(){
+  pinReady=!!pinHash;
+}
+
+async function setNewPin(value){
+  const result=await hashPin(value);
+  pinHash=result.hash;
+  pinSalt=result.salt;
+  localStorage.setItem("ep_device_pin_hash",pinHash);
+  localStorage.setItem("ep_device_pin_salt",pinSalt);
+  pinReady=true;
+}
+
+async function checkPin(value){
+  if(!pinHash||!pinSalt) return false;
+  const result=await hashPin(value,pinSalt);
+  return result.hash===pinHash;
+}
+
+function base64url(bytes){
+  return b64(bytes).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");
+}
+function fromBase64url(s){
+  s=s.replace(/-/g,"+").replace(/_/g,"/");
+  while(s.length%4)s+="=";
+  return unb64(s);
+}
+
+async function registerBiometric(){
+  if(!window.PublicKeyCredential || !navigator.credentials){
+    showToast("A biometria do navegador não está disponível neste dispositivo.");
+    return;
+  }
+  try{
+    const credential=await navigator.credentials.create({publicKey:{
+      challenge:crypto.getRandomValues(new Uint8Array(32)),
+      rp:{name:"Em Pauta",id:location.hostname},
+      user:{id:crypto.getRandomValues(new Uint8Array(16)),name:myNick||"usuario",displayName:myNick||"Usuário"},
+      pubKeyCredParams:[{type:"public-key",alg:-7},{type:"public-key",alg:-257}],
+      authenticatorSelection:{authenticatorAttachment:"platform",residentKey:"preferred",userVerification:"required"},
+      timeout:60000,attestation:"none"
+    }});
+    if(credential){
+      localStorage.setItem("ep_biometric_cred",base64url(credential.rawId));
+      showToast("Biometria deste dispositivo ativada.");
+    }
+  }catch(e){
+    console.warn(e);
+    showToast("Não foi possível ativar a biometria.");
+  }
+}
+
+async function unlockWithBiometric(){
+  const id=localStorage.getItem("ep_biometric_cred");
+  if(!id||!window.PublicKeyCredential||!navigator.credentials){
+    showToast("Biometria ainda não foi configurada.");
+    return;
+  }
+  try{
+    const credential=await navigator.credentials.get({publicKey:{
+      challenge:crypto.getRandomValues(new Uint8Array(32)),
+      rpId:location.hostname,
+      allowCredentials:[{type:"public-key",id:fromBase64url(id)}],
+      userVerification:"required",timeout:60000
+    }});
+    if(credential) unlockApp();
+  }catch(e){
+    console.warn(e);
+    showToast("Biometria não autorizada.");
+  }
+}
 
 function setupPinpad(){
   const pad=$("pinpad");
@@ -240,26 +319,34 @@ function renderDots(){
     const d=document.createElement("span"); d.className="dot"+(pinBuffer.length>i?" on":""); $("pinDots").appendChild(d);
   }
 }
-function handlePinKey(k){
+async function handlePinKey(k){
   if(k==="⌫"){pinBuffer=pinBuffer.slice(0,-1);renderDots();return;}
   if(k==="↵"){
     if(pinBuffer.length===6){
-      if(pin && pinBuffer===pin){unlockApp();}
-      else if(!pin){ pin=pinBuffer; localStorage.setItem("ep_device_pin",pin); unlockApp(); showToast("PIN deste dispositivo configurado.");}
-      else {pinBuffer="";renderDots();showToast("PIN incorreto.");}
+      if(pinReady){
+        if(await checkPin(pinBuffer)){unlockApp();}
+        else {pinBuffer="";renderDots();showToast("PIN incorreto.");}
+      } else {
+        await setNewPin(pinBuffer);
+        unlockApp();
+        showToast("PIN deste dispositivo configurado.");
+      }
     }
     return;
   }
-  if(/^\d$/.test(k)&&pinBuffer.length<6){pinBuffer+=k;renderDots(); if(pinBuffer.length===6) setTimeout(()=>handlePinKey("↵"),100);}
+  if(/^\d$/.test(k)&&pinBuffer.length<6){
+    pinBuffer+=k;renderDots();
+    if(pinBuffer.length===6)setTimeout(()=>handlePinKey("↵"),100);
+  }
 }
 function lockApp(){
-  if(!pin) return;
+  if(!pinReady) return;
   locked=true; pinBuffer=""; $("lockScreen").classList.remove("hidden"); renderDots();
 }
 function unlockApp(){
   locked=false; pinBuffer=""; $("lockScreen").classList.add("hidden"); lastActivity=Date.now();
 }
-$("biometricBtn").onclick=()=>showToast("A biometria depende do mecanismo de autenticação do dispositivo. O PIN continua disponível como fallback.");
+$("biometricBtn").onclick=()=>localStorage.getItem("ep_biometric_cred")?unlockWithBiometric():registerBiometric();
 
 function enterPanic(){
   $("panicScreen").classList.remove("hidden");
@@ -305,11 +392,26 @@ async function renderMessages(){
     if(d.reply?.text){
       const r=document.createElement("div"); r.className="reply"; r.textContent=`${d.reply.sender}: ${d.reply.text}`; bubble.appendChild(r);
     }
-    if(d.media?.url){
-      const el=d.media.type.startsWith("audio/")?document.createElement("audio"):document.createElement("img");
-      if(el.tagName==="IMG"){el.className="media";el.alt="Imagem";el.src=d.media.url;el.onclick=()=>window.open(d.media.url,"_blank","noopener,noreferrer");}
-      else {el.controls=true;el.src=d.media.url;}
-      bubble.appendChild(el);
+    if(d.media?.path){
+      const mediaBox=document.createElement("div");
+      mediaBox.className="media-loading";
+      mediaBox.textContent="Carregando mídia cifrada…";
+      bubble.appendChild(mediaBox);
+      decryptAttachment(d.media, d.senderUid===me.uid ? await getOtherUid() : d.senderUid).then(blob=>{
+        mediaBox.remove();
+        const url=URL.createObjectURL(blob);
+        const el=d.media.type?.startsWith("audio/")?document.createElement("audio"):document.createElement("img");
+        if(el.tagName==="IMG"){
+          el.className="media";
+          el.alt="Imagem";
+          el.src=url;
+          el.onclick=()=>window.open(url,"_blank","noopener,noreferrer");
+        } else {
+          el.controls=true;
+          el.src=url;
+        }
+        bubble.insertBefore(el,t);
+      }).catch(()=>{mediaBox.textContent="Mídia indisponível neste dispositivo.";});
     }
     const t=document.createElement("div"); t.className="text"; t.textContent=d.text||""; bubble.appendChild(t);
 
@@ -359,16 +461,24 @@ $("cancelReply").onclick=()=>{$("replyBar").classList.add("hidden");replyTarget=
 
 async function react(id,emoji){
   const m=messages.find(x=>x.id===id); if(!m)return;
-  const reactions={...(m.data.reactions||{})};
+  const reactions={...(m.raw.reactions||{})};
   reactions[emoji]=(reactions[emoji]||0)+1;
-  await updateDoc(doc(MSGS,id),{reactions}).catch(e=>showToast("Não foi possível reagir."));
+  await updateDoc(doc(MSGS,id),{reactions}).catch(()=>showToast("Não foi possível reagir."));
 }
 
 async function editMessage(m){
   const text=prompt("Editar mensagem:",m.data.text||"");
   if(text===null||!text.trim()||text===m.data.text)return;
   const other=await getOtherUid();
-  const payload=await encryptObject({text:text.trim(),senderNick:myNick,edited:true},other,m.id);
+  const body={
+    text:text.trim(),
+    senderNick:m.data.senderNick||myNick,
+    reply:m.data.reply||null,
+    media:m.data.media||null,
+    reactions:m.data.reactions||{},
+    createdAtMs:m.data.createdAtMs||Date.now()
+  };
+  const payload=await encryptObject(body,other,m.id);
   await updateDoc(doc(MSGS,m.id),{ciphertext:payload.ciphertext,salt:payload.salt,iv:payload.iv,v:payload.v,edited:true}).catch(()=>showToast("Falha ao editar."));
 }
 
@@ -391,12 +501,11 @@ async function encryptAttachment(file, otherUid){
 }
 
 async function decryptAttachment(media,otherUid){
-  const response=await fetch(media.url,{cache:"no-store",referrerPolicy:"no-referrer"});
-  const cipher=await response.arrayBuffer();
+  const cipher=await getBytes(ref(storage,media.path));
   const secret=await getSharedSecret(otherUid);
   const key=await deriveMessageKey(secret,unb64(media.salt));
   const plain=await crypto.subtle.decrypt({name:"AES-GCM",iv:unb64(media.iv)},key,cipher);
-  return new Blob([plain],{type:media.type});
+  return new Blob([plain],{type:media.type||"application/octet-stream"});
 }
 
 async function sendMessage(){
@@ -412,8 +521,7 @@ async function sendMessage(){
       const e=await encryptAttachment(selectedFile,other);
       const path=`private/${ROOM_ID}/media/${id}.bin`;
       await uploadBytes(ref(storage,path),e.cipher,{contentType:"application/octet-stream",cacheControl:"no-store"});
-      const url=await getDownloadURL(ref(storage,path));
-      media={url,path,type:e.type,name:e.name,salt:e.salt,iv:e.iv};
+      media={path,type:e.type,name:e.name,salt:e.salt,iv:e.iv};
     }
     const body={
       text,
@@ -458,6 +566,7 @@ async function decryptMessages(raw){
       body.createdAt=d.createdAt;
       body.createdAtMs=d.createdAtMs;
       body.edited=d.edited;
+      body.reactions=d.reactions||{};
       out.push({id:d.id,data:body,raw:d});
     }catch(e){
       out.push({id:d.id,data:{text:"[mensagem não disponível neste dispositivo]",senderUid:d.senderUid,senderNick:d.senderNick,createdAt:d.createdAt,createdAtMs:d.createdAtMs,seenBy:d.seenBy||[]},raw:d});
@@ -472,7 +581,7 @@ function listenKeys(){
     keyCache=new Map();
     snap.forEach(d=>keyCache.set(d.id,d.data()));
     sharedSecretCache.clear();
-    const other=[members.uidA,members.uidB].find(x=>x!==me.uid);
+    const other=[...keyCache.keys()].find(x=>x!==me.uid);
     $("status").textContent=keyCache.has(other)?"Conexão cifrada • "+(keyCache.get(other).nick||"online"):"Aguardando o outro dispositivo…";
   });
 }
@@ -525,8 +634,10 @@ async function start(){
   $("footer").classList.remove("hidden");
   listenKeys();listenMessages();listenStatus();
   await saveStatus(false);
+  await loadPin();
   setupPinpad();
-  if(!pin){
+  $("biometricBtn").textContent=localStorage.getItem("ep_biometric_cred")?"Desbloquear com biometria":"Ativar biometria deste dispositivo";
+  if(!pinReady){
     showToast("Crie um PIN de 6 dígitos para proteger este dispositivo.");
     $("lockScreen").classList.remove("hidden");
   }
