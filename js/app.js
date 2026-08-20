@@ -521,6 +521,12 @@ async function decryptAttachment(media,otherUid){
 }
 
 async function sendMessage(){
+  console.log("DIAGNOSTICO ENVIO", {
+  meUid: me?.uid,
+  authUid: auth.currentUser?.uid,
+  authenticated: !!auth.currentUser,
+  otherUid: await getOtherUid()
+});
   const input=$("messageInput");
   const text=input.value.trim();
   if(!text && !selectedFile)return;
