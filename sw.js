@@ -1,11 +1,58 @@
-const CACHE="em-pauta-v6-shell";
-const ASSETS=["./","./index.html","./manifest.json","./icon.svg","./css/app.css","./js/app.js"];
-self.addEventListener("install",e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
-self.addEventListener("activate",e=>e.waitUntil(self.clients.claim()));
-self.addEventListener("fetch",e=>{
-  const u=new URL(e.request.url);
-  if(u.origin!==location.origin)return;
-  e.respondWith(caches.match(e.request).then(cached=>cached||fetch(e.request).then(r=>{
-    const copy=r.clone(); caches.open(CACHE).then(c=>c.put(e.request,copy)); return r;
-  }).catch(()=>cached)));
+const CACHE_VERSION = "em-pauta-v7";
+const STATIC_CACHE = `${CACHE_VERSION}-static`;
+
+const STATIC_ASSETS = [
+  "./manifest.json",
+  "./icon.svg",
+  "./css/app.css"
+];
+
+self.addEventListener("install", event => {
+  event.waitUntil(
+    caches
+      .open(STATIC_CACHE)
+      .then(cache => cache.addAll(STATIC_ASSETS))
+      .then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener("activate", event => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then(keys =>
+        Promise.all(
+          keys
+            .filter(key => key !== STATIC_CACHE)
+            .map(key => caches.delete(key))
+        )
+      )
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener("fetch", event => {
+  const request = event.request;
+  const url = new URL(request.url);
+
+  // Só tratamos requisições do próprio Em Pauta.
+  if (url.origin !== location.origin) {
+    return;
+  }
+
+  // Nunca cachear HTML nem JavaScript do aplicativo.
+  // Isso garante que Ctrl+R receba sempre a versão atual.
+  if (
+    request.method !== "GET" ||
+    request.destination === "script" ||
+    request.destination === "document"
+  ) {
+    return;
+  }
+
+  event.respondWith(
+    caches.match(request).then(cached => {
+      return cached || fetch(request);
+    })
+  );
 });
