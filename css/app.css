@@ -317,8 +317,11 @@ header{
 }
 
 .icon{
-  width:42px;
-  height:42px;
+  width:48px;
+  height:48px;
+  min-width:48px;
+  font-size:23px;
+}
 
   border-radius:50%;
 
@@ -1382,7 +1385,7 @@ textarea{
   }
 
   .actions{
-    gap:0;
+    gap:3;
   }
 
   .icon{
