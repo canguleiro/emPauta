@@ -3755,15 +3755,15 @@ window.addEventListener(
    SERVICE WORKER
 ========================================================= */
 
-if (
-  "serviceWorker" in navigator
-) {
-
+if ("serviceWorker" in navigator) {
   navigator.serviceWorker
-    .register(
-      "./sw.js"
-    )
-    .catch(
-      () => {}
-    );
+    .register("./sw.js", {
+      updateViaCache: "none"
+    })
+    .then(registration => {
+      registration.update();
+    })
+    .catch(error => {
+      console.warn("Service Worker:", error);
+    });
 }
