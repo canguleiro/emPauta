@@ -1286,10 +1286,12 @@ textarea{
       min(46vw,220px);
   }
 
-  .icon{
-    width:42px;
-    height:42px;
-  }
+.icon{
+  width:48px;
+  height:48px;
+  min-width:48px;
+  font-size:23px;
+}
 
   .chat{
     padding:
