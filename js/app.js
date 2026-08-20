@@ -81,18 +81,13 @@ const KEYS = collection(
 
 
 /* =========================================================
-   UTILITÁRIOS
+   ELEMENTOS / UTILITÁRIOS
 ========================================================= */
 
 const $ = id => document.getElementById(id);
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
-
-
-/* =========================================================
-   ESTADO DA APLICAÇÃO
-========================================================= */
 
 let me = null;
 let members = null;
@@ -114,27 +109,15 @@ let sharedSecretCache = new Map();
 let replyTarget = null;
 let menuOpen = null;
 let searchText = "";
+
 let selectedFile = null;
 
 let locked = false;
-
-
-/* =========================================================
-   ESTADO DE CONEXÃO / RECONEXÃO
-========================================================= */
 
 let connectionState = "online";
 
 let messageListenerRetry = null;
 let messageListenerRetryCount = 0;
-
-let startingSession = false;
-let sessionReady = false;
-
-
-/* =========================================================
-   PIN / BLOQUEIO
-========================================================= */
 
 let pinHash =
   localStorage.getItem("ep_device_pin_hash") || "";
@@ -148,13 +131,23 @@ let pinReady = false;
 let lastActivity = Date.now();
 let lockTimer = null;
 
-
-/* =========================================================
-   MENSAGENS TEMPORÁRIAS
-========================================================= */
-
 let ttlSeconds =
   Number(localStorage.getItem("ep_ttl") || "0");
+
+
+/*
+ * NOVO:
+ * A sessão só será considerada pronta depois que
+ * Firebase Auth, chaves e listeners iniciais estiverem
+ * devidamente estabelecidos.
+ */
+let sessionReady = false;
+let keysReady = false;
+let messagesReady = false;
+let statusReady = false;
+
+let sessionInitPromise = null;
+let sessionInitResolve = null;
 
 
 /* =========================================================
@@ -195,40 +188,10 @@ function showToast(text) {
 
 
 /* =========================================================
-   ESTADO DE CONEXÃO
-========================================================= */
-
-function setConnectionState(state) {
-
-  connectionState = state;
-
-  const el = $("status");
-
-  if (!el) return;
-
-  if (state === "offline") {
-    el.textContent = "sem conexão";
-    return;
-  }
-
-  if (state === "reconnecting") {
-    el.textContent = "reconectando…";
-    return;
-  }
-
-  if (state === "error") {
-    el.textContent = "problema de conexão";
-    return;
-  }
-}
-
-
-/* =========================================================
-   BASE64
+   BASE64 / IDS
 ========================================================= */
 
 function b64(bytes) {
-
   const u8 =
     bytes instanceof Uint8Array
       ? bytes
@@ -251,7 +214,6 @@ function b64(bytes) {
 
 
 function unb64(s) {
-
   const bin = atob(s);
 
   const out =
@@ -270,7 +232,6 @@ function unb64(s) {
 
 
 function randomId(bytes = 16) {
-
   return b64(
     crypto.getRandomValues(
       new Uint8Array(bytes)
@@ -282,7 +243,6 @@ function randomId(bytes = 16) {
 
 
 function initials(name) {
-
   return (name || "EP")
     .trim()
     .split(/\s+/)
@@ -294,21 +254,17 @@ function initials(name) {
 
 
 /* =========================================================
-   INDEXED DB
+   INDEXED DB — CHAVES PRIVADAS
 ========================================================= */
 
 async function idbOpen() {
-
   return new Promise((resolve, reject) => {
-
-    const r =
-      indexedDB.open(
-        "em-pauta-private",
-        1
-      );
+    const r = indexedDB.open(
+      "em-pauta-private",
+      1
+    );
 
     r.onupgradeneeded = () => {
-
       const dbi = r.result;
 
       if (
@@ -318,21 +274,17 @@ async function idbOpen() {
       }
     };
 
-    r.onsuccess = () =>
-      resolve(r.result);
+    r.onsuccess = () => resolve(r.result);
 
-    r.onerror = () =>
-      reject(r.error);
+    r.onerror = () => reject(r.error);
   });
 }
 
 
 async function idbGet(k) {
-
   const dbi = await idbOpen();
 
   return new Promise((resolve, reject) => {
-
     const tx =
       dbi.transaction(
         "keys",
@@ -352,11 +304,9 @@ async function idbGet(k) {
 
 
 async function idbPut(k, v) {
-
   const dbi = await idbOpen();
 
   return new Promise((resolve, reject) => {
-
     const tx =
       dbi.transaction(
         "keys",
@@ -374,11 +324,9 @@ async function idbPut(k, v) {
 
 
 async function idbDelete(k) {
-
   const dbi = await idbOpen();
 
   return new Promise((resolve, reject) => {
-
     const tx =
       dbi.transaction(
         "keys",
@@ -396,16 +344,10 @@ async function idbDelete(k) {
 
 
 /* =========================================================
-   IDENTIDADE / CHAVES
+   IDENTIDADE CRIPTOGRÁFICA
 ========================================================= */
 
 async function ensureIdentity() {
-
-  if (!me) {
-    throw new Error(
-      "Sessão não autenticada."
-    );
-  }
 
   const storageKey =
     `privateKey:${me.uid}`;
@@ -418,6 +360,11 @@ async function ensureIdentity() {
     saved?.publicKeyJwk
   ) {
 
+    /*
+     * A chave privada permanece como
+     * CryptoKey não exportável.
+     */
+
     privateKey =
       saved.privateKey;
 
@@ -425,6 +372,11 @@ async function ensureIdentity() {
       saved.publicKeyJwk;
 
   } else {
+
+    /*
+     * O par é exportável somente
+     * durante a inicialização.
+     */
 
     const pair =
       await crypto.subtle.generateKey(
@@ -475,6 +427,10 @@ async function ensureIdentity() {
     );
   }
 
+  /*
+   * Publica somente a chave pública.
+   */
+
   await setDoc(
     doc(KEYS, me.uid),
     {
@@ -483,13 +439,18 @@ async function ensureIdentity() {
       nick: myNick,
       updatedAt: serverTimestamp()
     },
-    { merge: true }
+    {
+      merge: true
+    }
   );
 }
 
 
-async function importPublic(jwk) {
+/* =========================================================
+   CHAVES PÚBLICAS / ECDH
+========================================================= */
 
+async function importPublic(jwk) {
   return crypto.subtle.importKey(
     "jwk",
     jwk,
@@ -517,7 +478,6 @@ async function getSharedSecret(otherUid) {
     keyCache.get(otherUid);
 
   if (!other?.publicKey) {
-
     throw new Error(
       "A chave pública da outra pessoa ainda não está disponível."
     );
@@ -569,10 +529,9 @@ async function deriveMessageKey(
       name: "HKDF",
       hash: "SHA-256",
       salt,
-      info:
-        enc.encode(
-          "EmPauta-v2-message"
-        )
+      info: enc.encode(
+        "EmPauta-v2-message"
+      )
     },
     base,
     {
@@ -587,10 +546,6 @@ async function deriveMessageKey(
   );
 }
 
-
-/* =========================================================
-   CRIPTOGRAFIA DE MENSAGENS
-========================================================= */
 
 async function encryptObject(
   obj,
@@ -688,27 +643,28 @@ async function decryptObject(
 }
 
 
-/* =========================================================
-   OUTRO USUÁRIO
-========================================================= */
-
 async function getOtherUid() {
-
-  if (!me) return null;
 
   const ids =
     [...keyCache.keys()]
-      .filter(x => x !== me.uid);
+      .filter(
+        x => x !== me.uid
+      );
 
   return ids[0] || null;
 }
 
 
 /* =========================================================
-   MEMBERSHIP
+   MEMBRESIA
 ========================================================= */
 
 async function verifyMembership() {
+
+  /*
+   * A autorização real é feita pelas
+   * Firebase Security Rules.
+   */
 
   if (!me) {
     throw new Error(
@@ -737,10 +693,16 @@ async function saveStatus(
       lastActive:
         serverTimestamp()
     },
-    { merge: true }
+    {
+      merge: true
+    }
   ).catch(() => {});
 }
 
+
+/* =========================================================
+   ATIVIDADE / BLOQUEIO
+========================================================= */
 
 function updateActivity() {
 
@@ -782,7 +744,9 @@ function updateActivity() {
   window.addEventListener(
     ev,
     updateActivity,
-    { passive: true }
+    {
+      passive: true
+    }
   );
 
 });
@@ -833,9 +797,7 @@ async function hashPin(
 
 
 async function loadPin() {
-
-  pinReady =
-    !!pinHash;
+  pinReady = !!pinHash;
 }
 
 
@@ -879,7 +841,10 @@ async function checkPin(value) {
       pinSalt
     );
 
-  return result.hash === pinHash;
+  return (
+    result.hash ===
+    pinHash
+  );
 }
 
 
@@ -888,7 +853,6 @@ async function checkPin(value) {
 ========================================================= */
 
 function base64url(bytes) {
-
   return b64(bytes)
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
@@ -902,7 +866,9 @@ function fromBase64url(s) {
     .replace(/-/g, "+")
     .replace(/_/g, "/");
 
-  while (s.length % 4) {
+  while (
+    s.length % 4
+  ) {
     s += "=";
   }
 
@@ -916,11 +882,9 @@ async function registerBiometric() {
     !window.PublicKeyCredential ||
     !navigator.credentials
   ) {
-
     showToast(
       "A biometria do navegador não está disponível neste dispositivo."
     );
-
     return;
   }
 
@@ -944,8 +908,10 @@ async function registerBiometric() {
               crypto.getRandomValues(
                 new Uint8Array(16)
               ),
+
             name:
               myNick || "usuario",
+
             displayName:
               myNick || "Usuário"
           },
@@ -964,13 +930,16 @@ async function registerBiometric() {
           authenticatorSelection: {
             authenticatorAttachment:
               "platform",
+
             residentKey:
               "preferred",
+
             userVerification:
               "required"
           },
 
           timeout: 60000,
+
           attestation: "none"
         }
       });
@@ -1072,6 +1041,8 @@ function setupPinpad() {
   const pad =
     $("pinpad");
 
+  if (!pad) return;
+
   const keys = [
     "1","2","3",
     "4","5","6",
@@ -1090,8 +1061,8 @@ function setupPinpad() {
 
     b.textContent = k;
 
-    b.onclick = () =>
-      handlePinKey(k);
+    b.onclick =
+      () => handlePinKey(k);
 
     pad.appendChild(b);
   });
@@ -1102,7 +1073,12 @@ function setupPinpad() {
 
 function renderDots() {
 
-  $("pinDots").innerHTML = "";
+  const dots =
+    $("pinDots");
+
+  if (!dots) return;
+
+  dots.innerHTML = "";
 
   for (
     let i = 0;
@@ -1123,7 +1099,7 @@ function renderDots() {
           : ""
       );
 
-    $("pinDots").appendChild(d);
+    dots.appendChild(d);
   }
 }
 
@@ -1215,7 +1191,7 @@ function lockApp() {
   pinBuffer = "";
 
   $("lockScreen")
-    .classList
+    ?.classList
     .remove("hidden");
 
   renderDots();
@@ -1229,7 +1205,7 @@ function unlockApp() {
   pinBuffer = "";
 
   $("lockScreen")
-    .classList
+    ?.classList
     .add("hidden");
 
   lastActivity =
@@ -1237,15 +1213,16 @@ function unlockApp() {
 }
 
 
-$("biometricBtn").onclick =
-  () => {
+if ($("biometricBtn")) {
 
-    localStorage.getItem(
-      "ep_biometric_cred"
-    )
-      ? unlockWithBiometric()
-      : registerBiometric();
-  };
+  $("biometricBtn").onclick =
+    () =>
+      localStorage.getItem(
+        "ep_biometric_cred"
+      )
+        ? unlockWithBiometric()
+        : registerBiometric();
+}
 
 
 /* =========================================================
@@ -1255,64 +1232,70 @@ $("biometricBtn").onclick =
 function enterPanic() {
 
   $("panicScreen")
-    .classList
+    ?.classList
     .remove("hidden");
 
-  $("panicText").focus();
+  $("panicText")?.focus();
 }
 
 
 function leavePanic() {
 
   $("panicScreen")
-    .classList
+    ?.classList
     .add("hidden");
 }
 
 
-$("panicBtn").onclick =
-  enterPanic;
+if ($("panicBtn")) {
+  $("panicBtn").onclick =
+    enterPanic;
+}
 
 
-$("panicUnlock").onclick =
-  () => {
+if ($("panicUnlock")) {
 
-    const code =
-      prompt("Código de saída");
+  $("panicUnlock").onclick =
+    () => {
 
-    if (
-      code ===
-        localStorage.getItem(
-          "ep_panic_code"
-        ) &&
-      code
-    ) {
-
-      leavePanic();
-
-    } else if (
-      !localStorage.getItem(
-        "ep_panic_code"
-      )
-    ) {
-
-      const n =
+      const code =
         prompt(
-          "Crie um código curto para sair do modo disfarce"
+          "Código de saída"
         );
 
-      if (n) {
-
-        localStorage.setItem(
-          "ep_panic_code",
-          n
-        );
+      if (
+        code ===
+          localStorage.getItem(
+            "ep_panic_code"
+          ) &&
+        code
+      ) {
 
         leavePanic();
-      }
-    }
-  };
 
+      } else if (
+        !localStorage.getItem(
+          "ep_panic_code"
+        )
+      ) {
+
+        const n =
+          prompt(
+            "Crie um código curto para sair do modo disfarce"
+          );
+
+        if (n) {
+
+          localStorage.setItem(
+            "ep_panic_code",
+            n
+          );
+
+          leavePanic();
+        }
+      }
+    };
+}
 
 /* =========================================================
    RENDERIZAÇÃO DAS MENSAGENS
@@ -1320,16 +1303,18 @@ $("panicUnlock").onclick =
 
 async function renderMessages() {
 
-  const box =
-    $("chat");
+  const box = $("chat");
+
+  if (!box) return;
 
   box.innerHTML = "";
 
   const visible =
     messages.filter(m => {
 
-      if (!searchText)
+      if (!searchText) {
         return true;
+      }
 
       const x =
         (m.data?.text || "") +
@@ -1361,9 +1346,7 @@ async function renderMessages() {
         "pt-BR"
       );
 
-    if (
-      day !== previousDay
-    ) {
+    if (day !== previousDay) {
 
       previousDay = day;
 
@@ -1387,6 +1370,7 @@ async function renderMessages() {
       box.appendChild(sep);
     }
 
+
     const row =
       document.createElement(
         "div"
@@ -1400,6 +1384,7 @@ async function renderMessages() {
           : "other"
       );
 
+
     const bubble =
       document.createElement(
         "div"
@@ -1410,6 +1395,11 @@ async function renderMessages() {
 
     bubble.dataset.id =
       m.id;
+
+
+    /*
+     * Nome do remetente
+     */
 
     if (
       d.senderUid !== me.uid
@@ -1430,6 +1420,11 @@ async function renderMessages() {
       bubble.appendChild(s);
     }
 
+
+    /*
+     * Resposta
+     */
+
     if (d.reply?.text) {
 
       const r =
@@ -1445,6 +1440,11 @@ async function renderMessages() {
 
       bubble.appendChild(r);
     }
+
+
+    /*
+     * Mídia
+     */
 
     if (d.media?.path) {
 
@@ -1463,6 +1463,7 @@ async function renderMessages() {
         mediaBox
       );
 
+
       decryptAttachment(
         d.media,
         d.senderUid === me.uid
@@ -1478,20 +1479,29 @@ async function renderMessages() {
               blob
             );
 
-          const el =
+          let el;
+
+          if (
             d.media.type?.startsWith(
               "audio/"
             )
-              ? document.createElement(
-                  "audio"
-                )
-              : document.createElement(
-                  "img"
-                );
-
-          if (
-            el.tagName === "IMG"
           ) {
+
+            el =
+              document.createElement(
+                "audio"
+              );
+
+            el.controls = true;
+
+            el.src = url;
+
+          } else {
+
+            el =
+              document.createElement(
+                "img"
+              );
 
             el.className =
               "media";
@@ -1508,25 +1518,50 @@ async function renderMessages() {
                   "_blank",
                   "noopener,noreferrer"
                 );
+          }
+
+
+          /*
+           * Inserimos a mídia antes do
+           * conteúdo textual.
+           */
+
+          const textElement =
+            bubble.querySelector(
+              ".text"
+            );
+
+          if (textElement) {
+
+            bubble.insertBefore(
+              el,
+              textElement
+            );
 
           } else {
 
-            el.controls = true;
-
-            el.src = url;
+            bubble.appendChild(
+              el
+            );
           }
 
-          bubble.appendChild(
-            el
-          );
-
         })
-        .catch(() => {
+        .catch(error => {
+
+          console.warn(
+            "Falha ao descriptografar mídia:",
+            error
+          );
 
           mediaBox.textContent =
             "Mídia indisponível neste dispositivo.";
         });
     }
+
+
+    /*
+     * Texto
+     */
 
     const t =
       document.createElement(
@@ -1541,6 +1576,11 @@ async function renderMessages() {
 
     bubble.appendChild(t);
 
+
+    /*
+     * Reações
+     */
+
     if (d.reactions) {
 
       const rs =
@@ -1554,7 +1594,7 @@ async function renderMessages() {
       Object.entries(
         d.reactions
       ).forEach(
-        ([e, c]) => {
+        ([emoji, count]) => {
 
           const b =
             document.createElement(
@@ -1565,13 +1605,13 @@ async function renderMessages() {
             "reaction";
 
           b.textContent =
-            `${e} ${c}`;
+            `${emoji} ${count}`;
 
           b.onclick =
             () =>
               react(
                 m.id,
-                e
+                emoji
               );
 
           rs.appendChild(b);
@@ -1580,6 +1620,11 @@ async function renderMessages() {
 
       bubble.appendChild(rs);
     }
+
+
+    /*
+     * Metadados / horário
+     */
 
     const meta =
       document.createElement(
@@ -1605,6 +1650,11 @@ async function renderMessages() {
           ? " · editada"
           : ""
       );
+
+
+    /*
+     * ✓ / ✓✓
+     */
 
     if (
       d.senderUid === me.uid
@@ -1634,9 +1684,12 @@ async function renderMessages() {
       );
     }
 
-    bubble.appendChild(
-      meta
-    );
+    bubble.appendChild(meta);
+
+
+    /*
+     * Menu da mensagem
+     */
 
     const mb =
       document.createElement(
@@ -1660,9 +1713,8 @@ async function renderMessages() {
         );
       };
 
-    bubble.appendChild(
-      mb
-    );
+    bubble.appendChild(mb);
+
 
     row.appendChild(
       bubble
@@ -1673,13 +1725,18 @@ async function renderMessages() {
     );
   }
 
+
+  /*
+   * Mantém a conversa no final.
+   */
+
   box.scrollTop =
     box.scrollHeight;
 }
 
 
 /* =========================================================
-   MENU DE MENSAGEM
+   MENU DA MENSAGEM
 ========================================================= */
 
 function openMenu(
@@ -1695,6 +1752,7 @@ function openMenu(
       x => x.remove()
     );
 
+
   const menu =
     document.createElement(
       "div"
@@ -1702,6 +1760,7 @@ function openMenu(
 
   menu.className =
     "menu";
+
 
   const add =
     (label, fn) => {
@@ -1724,10 +1783,13 @@ function openMenu(
           await fn();
         };
 
-      menu.appendChild(
-        b
-      );
+      menu.appendChild(b);
     };
+
+
+  /*
+   * Reações rápidas
+   */
 
   [
     "❤️",
@@ -1736,16 +1798,17 @@ function openMenu(
     "😂",
     "👏"
   ].forEach(
-    e =>
+    emoji =>
       add(
-        e,
+        emoji,
         () =>
           react(
             m.id,
-            e
+            emoji
           )
       )
   );
+
 
   add(
     "Responder",
@@ -1753,9 +1816,13 @@ function openMenu(
       startReply(m)
   );
 
+
+  /*
+   * Só o remetente pode editar.
+   */
+
   if (
-    m.data.senderUid ===
-    me.uid
+    m.data.senderUid === me.uid
   ) {
 
     add(
@@ -1765,6 +1832,7 @@ function openMenu(
     );
   }
 
+
   add(
     "Copiar",
     () =>
@@ -1773,9 +1841,13 @@ function openMenu(
       )
   );
 
+
+  /*
+   * Só o remetente pode apagar.
+   */
+
   if (
-    m.data.senderUid ===
-    me.uid
+    m.data.senderUid === me.uid
   ) {
 
     add(
@@ -1785,6 +1857,7 @@ function openMenu(
     );
   }
 
+
   bubble.appendChild(
     menu
   );
@@ -1792,7 +1865,7 @@ function openMenu(
 
 
 /* =========================================================
-   RESPOSTAS
+   RESPOSTA
 ========================================================= */
 
 function startReply(m) {
@@ -1806,26 +1879,39 @@ function startReply(m) {
       "[mídia]"
   };
 
-  $("replyText").textContent =
-    `${replyTarget.sender}: ${replyTarget.text}`;
+
+  const replyText =
+    $("replyText");
+
+  if (replyText) {
+
+    replyText.textContent =
+      `${replyTarget.sender}: ${replyTarget.text}`;
+  }
+
 
   $("replyBar")
-    .classList
+    ?.classList
     .remove("hidden");
 
-  $("messageInput").focus();
+
+  $("messageInput")
+    ?.focus();
 }
 
 
-$("cancelReply").onclick =
-  () => {
+if ($("cancelReply")) {
 
-    $("replyBar")
-      .classList
-      .add("hidden");
+  $("cancelReply").onclick =
+    () => {
 
-    replyTarget = null;
-  };
+      $("replyBar")
+        ?.classList
+        .add("hidden");
+
+      replyTarget = null;
+    };
+}
 
 
 /* =========================================================
@@ -1844,13 +1930,17 @@ async function react(
 
   if (!m) return;
 
+
   const reactions = {
     ...(m.raw?.reactions || {})
   };
 
+
   reactions[emoji] =
-    (reactions[emoji] || 0) +
-    1;
+    (
+      reactions[emoji] || 0
+    ) + 1;
+
 
   try {
 
@@ -1876,7 +1966,7 @@ async function react(
 
 
 /* =========================================================
-   EDITAR
+   EDITAR MENSAGEM
 ========================================================= */
 
 async function editMessage(m) {
@@ -1887,6 +1977,7 @@ async function editMessage(m) {
       m.data.text || ""
     );
 
+
   if (
     text === null ||
     !text.trim() ||
@@ -1895,54 +1986,73 @@ async function editMessage(m) {
     return;
   }
 
+
+  const other =
+    await getOtherUid();
+
+
+  if (!other) {
+
+    showToast(
+      "A outra pessoa ainda não está disponível."
+    );
+
+    return;
+  }
+
+
+  const body = {
+
+    text:
+      text.trim(),
+
+    senderNick:
+      m.data.senderNick ||
+      myNick,
+
+    reply:
+      m.data.reply ||
+      null,
+
+    media:
+      m.data.media ||
+      null,
+
+    reactions:
+      m.data.reactions ||
+      {},
+
+    createdAtMs:
+      m.data.createdAtMs ||
+      Date.now()
+  };
+
+
+  const payload =
+    await encryptObject(
+      body,
+      other,
+      m.id
+    );
+
+
   try {
-
-    const other =
-      await getOtherUid();
-
-    if (!other) {
-      throw new Error(
-        "A outra pessoa ainda não está pareada."
-      );
-    }
-
-    const body = {
-      text: text.trim(),
-      senderNick:
-        m.data.senderNick ||
-        myNick,
-      reply:
-        m.data.reply ||
-        null,
-      media:
-        m.data.media ||
-        null,
-      reactions:
-        m.data.reactions ||
-        {},
-      createdAtMs:
-        m.data.createdAtMs ||
-        Date.now()
-    };
-
-    const payload =
-      await encryptObject(
-        body,
-        other,
-        m.id
-      );
 
     await updateDoc(
       doc(MSGS, m.id),
       {
         ciphertext:
           payload.ciphertext,
+
         salt:
           payload.salt,
+
         iv:
           payload.iv,
+
         v:
           payload.v,
+
         edited: true
       }
     );
@@ -1955,15 +2065,14 @@ async function editMessage(m) {
     );
 
     showToast(
-      e.message ||
-      "Falha ao editar."
+      "Falha ao editar a mensagem."
     );
   }
 }
 
 
 /* =========================================================
-   APAGAR
+   APAGAR MENSAGEM
 ========================================================= */
 
 async function deleteMessage(m) {
@@ -1976,6 +2085,7 @@ async function deleteMessage(m) {
     return;
   }
 
+
   try {
 
     await deleteDoc(
@@ -1986,12 +2096,14 @@ async function deleteMessage(m) {
       m.data.media?.path
     ) {
 
-      deleteObject(
+      await deleteObject(
         ref(
           storage,
           m.data.media.path
         )
-      ).catch(() => {});
+      ).catch(
+        () => {}
+      );
     }
 
   } catch (e) {
@@ -2009,7 +2121,7 @@ async function deleteMessage(m) {
 
 
 /* =========================================================
-   ANEXOS CIFRADOS
+   ANEXOS — CRIPTOGRAFIA
 ========================================================= */
 
 async function encryptAttachment(
@@ -2020,6 +2132,7 @@ async function encryptAttachment(
   const max =
     8 * 1024 * 1024;
 
+
   if (
     file.size > max
   ) {
@@ -2029,29 +2142,35 @@ async function encryptAttachment(
     );
   }
 
+
   const plain =
     await file.arrayBuffer();
+
 
   const secret =
     await getSharedSecret(
       otherUid
     );
 
+
   const salt =
     crypto.getRandomValues(
       new Uint8Array(16)
     );
+
 
   const iv =
     crypto.getRandomValues(
       new Uint8Array(12)
     );
 
+
   const key =
     await deriveMessageKey(
       secret,
       salt
     );
+
 
   const cipher =
     await crypto.subtle.encrypt(
@@ -2063,11 +2182,11 @@ async function encryptAttachment(
       plain
     );
 
+
   return {
+
     cipher:
-      new Uint8Array(
-        cipher
-      ),
+      new Uint8Array(cipher),
 
     salt:
       b64(salt),
@@ -2084,6 +2203,10 @@ async function encryptAttachment(
 }
 
 
+/* =========================================================
+   ANEXOS — DESCRIPTOGRAFIA
+========================================================= */
+
 async function decryptAttachment(
   media,
   otherUid
@@ -2097,16 +2220,19 @@ async function decryptAttachment(
       )
     );
 
+
   const secret =
     await getSharedSecret(
       otherUid
     );
+
 
   const key =
     await deriveMessageKey(
       secret,
       unb64(media.salt)
     );
+
 
   const plain =
     await crypto.subtle.decrypt(
@@ -2118,6 +2244,7 @@ async function decryptAttachment(
       key,
       cipher
     );
+
 
   return new Blob(
     [plain],
@@ -2131,16 +2258,216 @@ async function decryptAttachment(
 
 
 /* =========================================================
+   CONTROLE DA SESSÃO
+========================================================= */
+
+/*
+ * Atualiza visualmente o estado do botão de envio.
+ *
+ * A ideia é impedir que o usuário tente enviar
+ * antes que a sessão esteja completamente pronta.
+ */
+
+function updateSendState() {
+
+  const btn =
+    $("sendBtn");
+
+  if (!btn) return;
+
+
+  /*
+   * Não alteramos a aparência normal do botão
+   * quando a sessão já estiver pronta.
+   */
+
+  btn.disabled =
+    !sessionReady;
+
+
+  if (!sessionReady) {
+
+    btn.title =
+      "Aguardando conexão segura…";
+
+  } else {
+
+    btn.title =
+      "Enviar mensagem";
+  }
+}
+
+
+/*
+ * Atualiza o status textual da conexão sem
+ * sobrescrever estados mais específicos.
+ */
+
+function updateConnectionState(
+  text
+) {
+
+  const status =
+    $("status");
+
+  if (!status) return;
+
+  status.textContent =
+    text;
+}
+
+
+/*
+ * Resolve a promessa da inicialização somente
+ * quando os três listeners essenciais tiverem
+ * sido inicializados.
+ */
+
+function checkSessionReady() {
+
+  if (
+    keysReady &&
+    messagesReady &&
+    statusReady
+  ) {
+
+    sessionReady = true;
+
+    updateSendState();
+
+    if (
+      sessionInitResolve
+    ) {
+
+      sessionInitResolve();
+
+      sessionInitResolve =
+        null;
+    }
+  }
+}
+
+
+/*
+ * Aguarda a sessão ficar pronta.
+ */
+
+function waitForSessionReady() {
+
+  if (
+    sessionReady
+  ) {
+    return Promise.resolve();
+  }
+
+
+  if (
+    !sessionInitPromise
+  ) {
+
+    sessionInitPromise =
+      new Promise(
+        resolve => {
+          sessionInitResolve =
+            resolve;
+        }
+      );
+  }
+
+
+  return sessionInitPromise;
+}
+
+
+/*
+ * Reseta o estado da sessão quando
+ * precisamos reconstruir os listeners.
+ */
+
+function resetSessionState() {
+
+  sessionReady = false;
+
+  keysReady = false;
+
+  messagesReady = false;
+
+  statusReady = false;
+
+  sessionInitPromise =
+    null;
+
+  sessionInitResolve =
+    null;
+
+  sharedSecretCache.clear();
+
+  updateSendState();
+}
+
+
+/* =========================================================
    ENVIO DE MENSAGEM
 ========================================================= */
 
 async function sendMessage() {
 
+  /*
+   * Se o usuário clicar durante a inicialização,
+   * aguardamos em vez de simplesmente falhar.
+   */
+
+  if (!sessionReady) {
+
+    showToast(
+      "Aguardando conexão segura…"
+    );
+
+    try {
+
+      await Promise.race([
+        waitForSessionReady(),
+
+        new Promise(
+          (_, reject) =>
+            setTimeout(
+              () =>
+                reject(
+                  new Error(
+                    "Tempo limite aguardando a conexão segura."
+                  )
+                ),
+              10000
+            )
+        )
+      ]);
+
+    } catch (e) {
+
+      console.warn(
+        "Sessão ainda não está pronta:",
+        e
+      );
+
+      showToast(
+        "A conexão segura ainda não está pronta."
+      );
+
+      return;
+    }
+  }
+
+
   const input =
     $("messageInput");
 
+
+  if (!input) return;
+
+
   const text =
     input.value.trim();
+
 
   if (
     !text &&
@@ -2150,68 +2477,9 @@ async function sendMessage() {
   }
 
 
-  /* -------------------------------------------------------
-     VERIFICAÇÃO DE SESSÃO
-  ------------------------------------------------------- */
-
-  if (!me || !auth.currentUser) {
-
-    showToast(
-      "Sessão não está pronta. Aguarde um instante."
-    );
-
-    return;
-  }
-
-
-  /* -------------------------------------------------------
-     GARANTE TOKEN ATUALIZADO
-  ------------------------------------------------------- */
-
-  try {
-
-    await getIdToken(
-      auth.currentUser,
-      true
-    );
-
-  } catch (e) {
-
-    console.error(
-      "Falha ao atualizar autenticação:",
-      e
-    );
-
-    showToast(
-      "A sessão precisa ser reconectada."
-    );
-
-    return;
-  }
-
-
-  /* -------------------------------------------------------
-     VERIFICA CONEXÃO
-  ------------------------------------------------------- */
-
-  if (
-    !navigator.onLine
-  ) {
-
-    showToast(
-      "Sem conexão. A mensagem não foi enviada."
-    );
-
-    return;
-  }
-
-
-  /* -------------------------------------------------------
-     OUTRO USUÁRIO
-  ------------------------------------------------------- */
-
   const other =
     await getOtherUid();
+
 
   if (!other) {
 
@@ -2223,17 +2491,45 @@ async function sendMessage() {
   }
 
 
+  /*
+   * Reforço de autenticação antes da gravação.
+   *
+   * Isso reduz a possibilidade de uma sessão
+   * recém-restaurada pelo navegador ainda estar
+   * utilizando um token antigo.
+   */
+
+  try {
+
+    if (auth.currentUser) {
+
+      await getIdToken(
+        auth.currentUser,
+        true
+      );
+    }
+
+  } catch (e) {
+
+    console.warn(
+      "Não foi possível renovar o token antes do envio:",
+      e
+    );
+  }
+
+
   const id =
     randomId(18);
+
 
   let media = null;
 
 
   try {
 
-    /* -----------------------------------------------------
-       ANEXO
-    ----------------------------------------------------- */
+    /*
+     * Anexo
+     */
 
     if (selectedFile) {
 
@@ -2243,33 +2539,49 @@ async function sendMessage() {
           other
         );
 
+
       const path =
         `private/${ROOM_ID}/media/${id}.bin`;
 
+
       await uploadBytes(
-        ref(storage, path),
+        ref(
+          storage,
+          path
+        ),
         e.cipher,
         {
           contentType:
             "application/octet-stream",
+
           cacheControl:
             "no-store"
         }
       );
 
+
       media = {
+
         path,
-        type: e.type,
-        name: e.name,
-        salt: e.salt,
-        iv: e.iv
+
+        type:
+          e.type,
+
+        name:
+          e.name,
+
+        salt:
+          e.salt,
+
+        iv:
+          e.iv
       };
     }
 
 
-    /* -----------------------------------------------------
-       CORPO DA MENSAGEM
-    ----------------------------------------------------- */
+    /*
+     * Corpo da mensagem.
+     */
 
     const body = {
 
@@ -2283,6 +2595,7 @@ async function sendMessage() {
           ? {
               sender:
                 replyTarget.sender,
+
               text:
                 replyTarget.text
             }
@@ -2297,9 +2610,9 @@ async function sendMessage() {
     };
 
 
-    /* -----------------------------------------------------
-       CIFRA
-    ----------------------------------------------------- */
+    /*
+     * Criptografia da mensagem.
+     */
 
     const encrypted =
       await encryptObject(
@@ -2309,70 +2622,150 @@ async function sendMessage() {
       );
 
 
-    /* -----------------------------------------------------
-       FIRESTORE
-    ----------------------------------------------------- */
+    const messageData = {
 
-    await setDoc(
-      doc(MSGS, id),
-      {
-        senderUid:
-          me.uid,
+      senderUid:
+        me.uid,
 
-        senderNick:
-          myNick,
+      senderNick:
+        myNick,
 
-        ciphertext:
-          encrypted.ciphertext,
+      ciphertext:
+        encrypted.ciphertext,
 
-        salt:
-          encrypted.salt,
+      salt:
+        encrypted.salt,
 
-        iv:
-          encrypted.iv,
+      iv:
+        encrypted.iv,
 
-        v:
-          encrypted.v,
+      v:
+        encrypted.v,
 
-        createdAt:
-          serverTimestamp(),
+      createdAt:
+        serverTimestamp(),
 
-        createdAtMs:
-          Date.now(),
+      createdAtMs:
+        Date.now(),
 
-        seenBy:
-          [me.uid],
+      seenBy: [
+        me.uid
+      ],
 
-        edited:
-          false,
+      edited: false,
 
-        reactions: {}
+      reactions: {}
+    };
+
+
+    /*
+     * Primeira tentativa.
+     */
+
+    try {
+
+      await setDoc(
+        doc(MSGS, id),
+        messageData
+      );
+
+    } catch (firstError) {
+
+      /*
+       * Se o Firebase ainda estiver
+       * reconstruindo a autenticação depois
+       * de um reload, renovamos o token e
+       * fazemos uma segunda tentativa.
+       */
+
+      if (
+        firstError?.code ===
+        "permission-denied"
+      ) {
+
+        console.warn(
+          "Permission denied na primeira tentativa. Renovando autenticação…"
+        );
+
+
+        if (
+          auth.currentUser
+        ) {
+
+          await getIdToken(
+            auth.currentUser,
+            true
+          );
+        }
+
+
+        /*
+         * Pequeno intervalo para permitir
+         * que o estado de autenticação seja
+         * propagado pelo SDK.
+         */
+
+        await new Promise(
+          resolve =>
+            setTimeout(
+              resolve,
+              250
+            )
+        );
+
+
+        await setDoc(
+          doc(MSGS, id),
+          messageData
+        );
+
+      } else {
+
+        throw firstError;
       }
-    );
+    }
 
 
-    /* -----------------------------------------------------
-       LIMPA INTERFACE
-    ----------------------------------------------------- */
+    /*
+     * Limpeza da interface.
+     */
 
     input.value = "";
 
     input.style.height =
       "auto";
 
-    selectedFile = null;
 
-    $("fileInput").value =
-      "";
+    selectedFile =
+      null;
 
-    $("sendBtn").textContent =
-      "➤";
+
+    const fileInput =
+      $("fileInput");
+
+    if (fileInput) {
+      fileInput.value =
+        "";
+    }
+
+
+    const sendBtn =
+      $("sendBtn");
+
+    if (sendBtn) {
+      sendBtn.textContent =
+        "➤";
+    }
+
 
     $("replyBar")
-      .classList
+      ?.classList
       .add("hidden");
 
-    replyTarget = null;
+
+    replyTarget =
+      null;
+
 
     await saveStatus(
       false
@@ -2382,57 +2775,29 @@ async function sendMessage() {
   } catch (e) {
 
     console.error(
-      "ERRO AO ENVIAR MENSAGEM:",
-      {
-        code: e?.code,
-        message: e?.message,
-        name: e?.name,
-        uid: me?.uid,
-        otherUid: other,
-        online:
-          navigator.onLine,
-        connectionState
-      }
+      "Erro ao enviar mensagem:",
+      e
     );
 
 
-    if (
-      e?.code ===
-      "permission-denied"
-    ) {
-
-      showToast(
-        "Firebase recusou a gravação da mensagem. A sessão pode estar sendo renovada."
-      );
-
-      /*
-       * Recarrega o listener para garantir
-       * que o cliente volte a trabalhar com
-       * o estado atual da autenticação.
-       */
-
-      setConnectionState(
-        "reconnecting"
-      );
-
-      setTimeout(
-        () => listenMessages(),
-        500
-      );
-
-      return;
-    }
-
+    /*
+     * Se um anexo foi enviado para o
+     * Storage mas a mensagem não chegou
+     * ao Firestore, tentamos removê-lo.
+     */
 
     if (
-      !navigator.onLine
+      media?.path
     ) {
 
-      showToast(
-        "Sem conexão. A mensagem não foi enviada."
+      await deleteObject(
+        ref(
+          storage,
+          media.path
+        )
+      ).catch(
+        () => {}
       );
-
-      return;
     }
 
 
@@ -2443,25 +2808,29 @@ async function sendMessage() {
   }
 }
 
-
 /* =========================================================
    DESCRIPTOGRAFAR MENSAGENS
 ========================================================= */
 
-async function decryptMessages(
-  raw
-) {
+async function decryptMessages(raw) {
 
   const other =
     await getOtherUid();
 
   const out = [];
 
-  for (
-    const d of raw
-  ) {
+  for (const d of raw) {
 
     try {
+
+      /*
+       * Mensagens enviadas por nós precisam
+       * ser descriptografadas usando a chave
+       * do outro usuário.
+       *
+       * Mensagens recebidas usam a chave
+       * pública do remetente.
+       */
 
       const body =
         await decryptObject(
@@ -2471,6 +2840,7 @@ async function decryptMessages(
             : d.senderUid,
           d.id
         );
+
 
       body.seenBy =
         d.seenBy || [];
@@ -2493,18 +2863,28 @@ async function decryptMessages(
       body.reactions =
         d.reactions || {};
 
+
       out.push({
         id: d.id,
         data: body,
         raw: d
       });
 
+
     } catch (e) {
 
+      /*
+       * Se a mensagem não puder ser
+       * descriptografada, não expomos
+       * nenhum conteúdo parcial.
+       */
+
       out.push({
+
         id: d.id,
 
         data: {
+
           text:
             "[mensagem não disponível neste dispositivo]",
 
@@ -2534,21 +2914,45 @@ async function decryptMessages(
 
 
 /* =========================================================
-   LISTENER DE CHAVES
+   LISTENER DAS CHAVES
 ========================================================= */
 
 function listenKeys() {
 
+  /*
+   * Remove listener anterior.
+   */
+
   unsubscribeKeys?.();
+
+
+  /*
+   * Sempre que reconstruirmos os listeners,
+   * a sessão volta temporariamente a ficar
+   * "não pronta".
+   */
+
+  keysReady = false;
+
+  sessionReady = false;
+
+  updateSendState();
+
 
   unsubscribeKeys =
     onSnapshot(
+
       KEYS,
 
       snap => {
 
+        /*
+         * Reconstrói o cache de chaves.
+         */
+
         keyCache =
           new Map();
+
 
         snap.forEach(
           d =>
@@ -2558,45 +2962,79 @@ function listenKeys() {
             )
         );
 
+
+        /*
+         * Se as chaves mudaram, o segredo
+         * compartilhado anterior não deve
+         * ser reutilizado.
+         */
+
         sharedSecretCache.clear();
+
+
+        /*
+         * Verifica se o outro usuário
+         * já publicou sua chave pública.
+         */
 
         const other =
           [...keyCache.keys()]
             .find(
-              x => x !== me.uid
+              x =>
+                x !== me.uid
             );
+
 
         if (!other) {
 
+          keysReady = false;
+
           if (
             connectionState !==
-            "offline" &&
+              "offline" &&
             connectionState !==
-            "reconnecting"
+              "reconnecting"
           ) {
 
-            $("status").textContent =
-              "Aguardando o outro dispositivo…";
+            updateConnectionState(
+              "Aguardando o outro dispositivo…"
+            );
           }
+
+          updateSendState();
 
           return;
         }
+
+
+        /*
+         * A chave do outro dispositivo
+         * está disponível.
+         */
+
+        keysReady = true;
+
 
         if (
           connectionState ===
           "online"
         ) {
 
-          $("status").textContent =
+          updateConnectionState(
             "Conexão cifrada • " +
             (
               keyCache.get(
                 other
               )?.nick ||
               "online"
-            );
+            )
+          );
         }
+
+
+        checkSessionReady();
       },
+
 
       error => {
 
@@ -2605,19 +3043,33 @@ function listenKeys() {
           error
         );
 
+
+        keysReady = false;
+
+        sessionReady = false;
+
+        updateSendState();
+
+
         if (
           error?.code ===
           "permission-denied"
         ) {
 
-          setConnectionState(
-            "error"
+          connectionState =
+            "error";
+
+          updateConnectionState(
+            "problema de autorização"
           );
 
         } else {
 
-          setConnectionState(
-            "reconnecting"
+          connectionState =
+            "reconnecting";
+
+          updateConnectionState(
+            "reconectando…"
           );
         }
       }
@@ -2626,33 +3078,28 @@ function listenKeys() {
 
 
 /* =========================================================
-   LISTENER DE MENSAGENS
+   LISTENER DAS MENSAGENS
 ========================================================= */
 
 function listenMessages() {
 
   /*
-   * Cancela listener anterior.
+   * Remove listener anterior.
    */
 
   unsubscribeMessages?.();
 
 
   /*
-   * Cancela tentativa de reconexão anterior.
+   * A sessão deixa temporariamente
+   * de estar pronta durante a reconstrução.
    */
 
-  if (
-    messageListenerRetry
-  ) {
+  messagesReady = false;
 
-    clearTimeout(
-      messageListenerRetry
-    );
+  sessionReady = false;
 
-    messageListenerRetry =
-      null;
-  }
+  updateSendState();
 
 
   const q =
@@ -2674,18 +3121,21 @@ function listenMessages() {
       async snap => {
 
         /*
-         * Listener voltou a funcionar.
+         * Listener respondeu.
+         * Isso significa que o Firebase
+         * conseguiu ler a coleção.
          */
 
         messageListenerRetryCount =
           0;
 
-        setConnectionState(
-          "online"
-        );
+
+        connectionState =
+          "online";
 
 
         const raw = [];
+
 
         snap.forEach(
           d =>
@@ -2695,6 +3145,12 @@ function listenMessages() {
             })
         );
 
+
+        /*
+         * Descriptografa as mensagens
+         * antes de liberar completamente
+         * a interface.
+         */
 
         messages =
           await decryptMessages(
@@ -2706,16 +3162,32 @@ function listenMessages() {
 
 
         /*
-         * A marcação de leitura não
-         * deve impedir a recepção.
+         * Agora sabemos que o listener
+         * de mensagens está efetivamente
+         * operacional.
+         */
+
+        messagesReady = true;
+
+
+        checkSessionReady();
+
+
+        /*
+         * Essas operações não podem impedir
+         * o recebimento das mensagens.
          */
 
         markSeen()
-          .catch(() => {});
+          .catch(
+            () => {}
+          );
 
 
         expireOldMessages()
-          .catch(() => {});
+          .catch(
+            () => {}
+          );
       },
 
 
@@ -2726,16 +3198,23 @@ function listenMessages() {
           {
             code:
               error?.code,
+
             message:
               error?.message
           }
         );
 
 
+        messagesReady = false;
+
+        sessionReady = false;
+
+        updateSendState();
+
+
         /*
-         * Permission denied não é
-         * tratado como simples
-         * desconexão.
+         * Permission denied é tratado
+         * separadamente.
          */
 
         if (
@@ -2743,8 +3222,11 @@ function listenMessages() {
           "permission-denied"
         ) {
 
-          setConnectionState(
-            "error"
+          connectionState =
+            "error";
+
+          updateConnectionState(
+            "problema de autorização"
           );
 
           showToast(
@@ -2757,11 +3239,15 @@ function listenMessages() {
 
         /*
          * Outros erros podem ser
-         * transitórios.
+         * temporários.
          */
 
-        setConnectionState(
-          "reconnecting"
+        connectionState =
+          "reconnecting";
+
+
+        updateConnectionState(
+          "reconectando…"
         );
 
 
@@ -2774,6 +3260,16 @@ function listenMessages() {
           );
         }
 
+
+        /*
+         * Backoff progressivo:
+         *
+         * 2s
+         * 4s
+         * 8s
+         * 16s
+         * 30s máximo
+         */
 
         const delay =
           Math.min(
@@ -2804,12 +3300,13 @@ function listenMessages() {
 
 
 /* =========================================================
-   MARCAR COMO LIDA
+   MARCAR MENSAGENS COMO LIDAS
 ========================================================= */
 
 async function markSeen() {
 
   if (!me) return;
+
 
   for (
     const m of messages
@@ -2820,11 +3317,16 @@ async function markSeen() {
         me.uid &&
       !(
         m.data.seenBy || []
-      ).includes(me.uid)
+      ).includes(
+        me.uid
+      )
     ) {
 
       updateDoc(
-        doc(MSGS, m.id),
+        doc(
+          MSGS,
+          m.id
+        ),
         {
           seenBy:
             arrayUnion(
@@ -2840,16 +3342,19 @@ async function markSeen() {
 
 
 /* =========================================================
-   EXPIRAÇÃO
+   EXPIRAÇÃO DAS MENSAGENS
 ========================================================= */
 
 async function expireOldMessages() {
 
-  if (!ttlSeconds)
+  if (!ttlSeconds) {
     return;
+  }
+
 
   const now =
     Date.now();
+
 
   for (
     const m of messages
@@ -2858,6 +3363,7 @@ async function expireOldMessages() {
     const t =
       m.data.createdAtMs ||
       0;
+
 
     if (
       t &&
@@ -2876,12 +3382,24 @@ async function expireOldMessages() {
 
 
 /* =========================================================
-   STATUS DO OUTRO USUÁRIO
+   LISTENER DE STATUS
 ========================================================= */
 
 function listenStatus() {
 
+  /*
+   * Remove listener anterior.
+   */
+
   unsubscribeStatus?.();
+
+
+  statusReady = false;
+
+  sessionReady = false;
+
+  updateSendState();
+
 
   unsubscribeStatus =
     onSnapshot(
@@ -2893,7 +3411,8 @@ function listenStatus() {
         const other =
           [...snap.docs]
             .map(
-              d => d.data()
+              d =>
+                d.data()
             )
             .find(
               x =>
@@ -2902,18 +3421,32 @@ function listenStatus() {
             );
 
 
+        /*
+         * O listener respondeu.
+         * Mesmo que o outro usuário ainda
+         * não tenha publicado status, o
+         * listener está funcional.
+         */
+
+        statusReady = true;
+
+
         if (!other) {
 
           if (
             connectionState !==
-            "offline" &&
+              "offline" &&
             connectionState !==
-            "reconnecting"
+              "reconnecting"
           ) {
 
-            $("status").textContent =
-              "Conversa cifrada";
+            updateConnectionState(
+              "Conversa cifrada"
+            );
           }
+
+
+          checkSessionReady();
 
           return;
         }
@@ -2932,8 +3465,12 @@ function listenStatus() {
           "offline"
         ) {
 
-          $("status").textContent =
-            "sem conexão";
+          updateConnectionState(
+            "sem conexão"
+          );
+
+
+          checkSessionReady();
 
           return;
         }
@@ -2944,8 +3481,12 @@ function listenStatus() {
           "reconnecting"
         ) {
 
-          $("status").textContent =
-            "reconectando…";
+          updateConnectionState(
+            "reconectando…"
+          );
+
+
+          checkSessionReady();
 
           return;
         }
@@ -2956,22 +3497,31 @@ function listenStatus() {
           "error"
         ) {
 
-          $("status").textContent =
-            "problema de conexão";
+          updateConnectionState(
+            "problema de conexão"
+          );
+
+
+          checkSessionReady();
 
           return;
         }
 
 
-        $("status").textContent =
+        updateConnectionState(
           other.typing
             ? "está a escrever…"
             : (
                 active
                   ? "online"
                   : "offline"
-              );
+              )
+        );
+
+
+        checkSessionReady();
       },
+
 
       error => {
 
@@ -2980,19 +3530,33 @@ function listenStatus() {
           error
         );
 
+
+        statusReady = false;
+
+        sessionReady = false;
+
+        updateSendState();
+
+
         if (
           error?.code ===
           "permission-denied"
         ) {
 
-          setConnectionState(
-            "error"
+          connectionState =
+            "error";
+
+          updateConnectionState(
+            "problema de autorização"
           );
 
         } else {
 
-          setConnectionState(
-            "reconnecting"
+          connectionState =
+            "reconnecting";
+
+          updateConnectionState(
+            "reconectando…"
           );
         }
       }
@@ -3001,31 +3565,31 @@ function listenStatus() {
 
 
 /* =========================================================
-   RECONEXÃO ONLINE / OFFLINE
+   RECONEXÃO — INTERNET VOLTOU
 ========================================================= */
 
 window.addEventListener(
-  "offline",
-  () => {
-
-    setConnectionState(
-      "offline"
-    );
-
-    showToast(
-      "Você está sem conexão."
-    );
-  }
-);
-
-
-window.addEventListener(
   "online",
-  () => {
+  async () => {
 
-    setConnectionState(
-      "reconnecting"
+    connectionState =
+      "reconnecting";
+
+    updateConnectionState(
+      "reconectando…"
     );
+
+
+    sessionReady = false;
+
+    keysReady = false;
+
+    messagesReady = false;
+
+    statusReady = false;
+
+    updateSendState();
+
 
     showToast(
       "Conexão restaurada. Sincronizando…"
@@ -3035,6 +3599,12 @@ window.addEventListener(
     messageListenerRetryCount =
       0;
 
+
+    /*
+     * Primeiro damos ao navegador
+     * um pequeno intervalo para estabilizar
+     * a conexão.
+     */
 
     setTimeout(
       async () => {
@@ -3060,6 +3630,10 @@ window.addEventListener(
         }
 
 
+        /*
+         * Reconstrói os três listeners.
+         */
+
         listenKeys();
 
         listenMessages();
@@ -3074,16 +3648,60 @@ window.addEventListener(
 
 
 /* =========================================================
+   RECONEXÃO — INTERNET CAIU
+========================================================= */
+
+window.addEventListener(
+  "offline",
+  () => {
+
+    connectionState =
+      "offline";
+
+
+    sessionReady =
+      false;
+
+
+    updateSendState();
+
+
+    updateConnectionState(
+      "sem conexão"
+    );
+
+
+    showToast(
+      "Você está sem conexão."
+    );
+  }
+);
+
+
+/* =========================================================
    INICIALIZAÇÃO DA SESSÃO
 ========================================================= */
 
 async function start() {
 
-  await verifyMembership();
+  /*
+   * Começamos sempre como
+   * "não pronto".
+   */
+
+  resetSessionState();
+
 
   /*
-   * Garante token atualizado antes
-   * das primeiras operações Firestore.
+   * Verifica autenticação.
+   */
+
+  await verifyMembership();
+
+
+  /*
+   * Renova o token antes das primeiras
+   * operações Firestore.
    */
 
   if (
@@ -3097,29 +3715,55 @@ async function start() {
   }
 
 
+  /*
+   * Recupera ou cria a identidade
+   * criptográfica local.
+   */
+
   await ensureIdentity();
 
 
-  $("myAvatar").textContent =
-    initials(myNick);
+  /*
+   * Avatar.
+   */
+
+  if ($("myAvatar")) {
+
+    $("myAvatar").textContent =
+      initials(myNick);
+  }
+
+
+  /*
+   * Interface principal.
+   */
 
   $("authScreen")
-    .classList
+    ?.classList
     .add("hidden");
 
   $("header")
-    .classList
+    ?.classList
     .remove("hidden");
 
   $("footer")
-    .classList
+    ?.classList
     .remove("hidden");
 
 
   /*
-   * Os listeners são iniciados
-   * somente depois da identidade
-   * estar pronta.
+   * Enquanto os listeners não responderem,
+   * o botão de envio permanece desabilitado.
+   */
+
+  sessionReady =
+    false;
+
+  updateSendState();
+
+
+  /*
+   * Inicia os listeners.
    */
 
   listenKeys();
@@ -3129,23 +3773,39 @@ async function start() {
   listenStatus();
 
 
+  /*
+   * Publica nosso status.
+   */
+
   await saveStatus(
     false
   );
 
+
+  /*
+   * PIN.
+   */
 
   await loadPin();
 
   setupPinpad();
 
 
-  $("biometricBtn").textContent =
-    localStorage.getItem(
-      "ep_biometric_cred"
-    )
-      ? "Desbloquear com biometria"
-      : "Ativar biometria deste dispositivo";
+  if ($("biometricBtn")) {
 
+    $("biometricBtn").textContent =
+      localStorage.getItem(
+        "ep_biometric_cred"
+      )
+        ? "Desbloquear com biometria"
+        : "Ativar biometria deste dispositivo";
+  }
+
+
+  /*
+   * Primeiro acesso:
+   * pede criação do PIN.
+   */
 
   if (!pinReady) {
 
@@ -3154,95 +3814,116 @@ async function start() {
     );
 
     $("lockScreen")
-      .classList
+      ?.classList
       .remove("hidden");
   }
-
-
-  sessionReady = true;
 }
-
 
 /* =========================================================
    LOGIN
 ========================================================= */
 
-$("authForm").onsubmit =
-  async e => {
-
-    e.preventDefault();
-
-    $("authError")
-      .textContent = "";
-
-    const email =
-      $("email")
-        .value
-        .trim();
-
-    const password =
-      $("password").value;
-
-    const nickname =
-      $("nickname")
-        .value
-        .trim();
+let startingSession = false;
 
 
-    if (!nickname) {
+if ($("authForm")) {
 
-      $("authError")
-        .textContent =
-        "Informe um nome/apelido para este dispositivo.";
+  $("authForm").onsubmit =
+    async e => {
 
-      return;
-    }
+      e.preventDefault();
 
 
-    sessionStorage.setItem(
-      "ep_pending_nick",
-      nickname
-    );
+      $("authError").textContent =
+        "";
 
 
-    try {
+      const email =
+        $("email").value.trim();
 
-      await signInWithEmailAndPassword(
-        auth,
-        email,
-        password
+
+      const password =
+        $("password").value;
+
+
+      const nickname =
+        $("nickname").value.trim();
+
+
+      if (!nickname) {
+
+        $("authError").textContent =
+          "Informe um nome/apelido para este dispositivo.";
+
+        return;
+      }
+
+
+      /*
+       * Guardamos o apelido temporariamente.
+       *
+       * O Firebase conclui o login de forma
+       * assíncrona e onAuthStateChanged será
+       * o único ponto que inicia a sessão.
+       */
+
+      sessionStorage.setItem(
+        "ep_pending_nick",
+        nickname
       );
 
-    } catch (err) {
 
-      sessionStorage.removeItem(
-        "ep_pending_nick"
-      );
+      try {
 
-      console.error(
-        err
-      );
+        await signInWithEmailAndPassword(
+          auth,
+          email,
+          password
+        );
 
-      $("authError")
-        .textContent =
-        err.code ===
-        "auth/invalid-credential"
-          ? "E-mail ou senha inválidos."
-          : (
-              err.message ||
-              "Não foi possível entrar."
-            );
-    }
-  };
+      } catch (err) {
+
+        sessionStorage.removeItem(
+          "ep_pending_nick"
+        );
+
+
+        console.error(
+          "Falha no login:",
+          err
+        );
+
+
+        if (
+          err.code ===
+          "auth/invalid-credential"
+        ) {
+
+          $("authError").textContent =
+            "E-mail ou senha inválidos.";
+
+        } else {
+
+          $("authError").textContent =
+            err.message ||
+            "Não foi possível entrar.";
+        }
+      }
+    };
+}
 
 
 /* =========================================================
-   AUTH STATE
+   ESTADO DE AUTENTICAÇÃO
 ========================================================= */
 
 onAuthStateChanged(
   auth,
   async user => {
+
+    /*
+     * Usuário saiu.
+     */
 
     if (!user) {
 
@@ -3251,14 +3932,31 @@ onAuthStateChanged(
       sessionReady =
         false;
 
+      keysReady =
+        false;
+
+      messagesReady =
+        false;
+
+      statusReady =
+        false;
+
+      updateSendState();
+
       return;
     }
 
+
+    /*
+     * Evita inicializar a mesma sessão
+     * duas vezes.
+     */
 
     if (
       startingSession ||
       me?.uid === user.uid
     ) {
+
       return;
     }
 
@@ -3266,17 +3964,25 @@ onAuthStateChanged(
     startingSession =
       true;
 
-    sessionReady =
-      false;
 
     me = user;
 
 
+    /*
+     * Recupera apelido temporário.
+     */
+
     const pendingNick =
       sessionStorage.getItem(
         "ep_pending_nick"
-      ) || "";
+      );
 
+
+    /*
+     * Se já conhecemos o usuário neste
+     * dispositivo, podemos recuperar o
+     * apelido salvo localmente.
+     */
 
     myNick =
       pendingNick ||
@@ -3287,6 +3993,10 @@ onAuthStateChanged(
       "";
 
 
+    /*
+     * Sem apelido, não iniciamos a sessão.
+     */
+
     if (!myNick) {
 
       startingSession =
@@ -3294,19 +4004,26 @@ onAuthStateChanged(
 
       me = null;
 
+
       await signOut(
         auth
       ).catch(
         () => {}
       );
 
+
       $("authScreen")
-        .classList
+        ?.classList
         .remove("hidden");
+
 
       return;
     }
 
+
+    /*
+     * Salva o apelido neste dispositivo.
+     */
 
     localStorage.setItem(
       "ep_nick_" +
@@ -3322,7 +4039,12 @@ onAuthStateChanged(
 
     try {
 
+      /*
+       * Inicia a sessão completa.
+       */
+
       await start();
+
 
     } catch (e) {
 
@@ -3339,8 +4061,17 @@ onAuthStateChanged(
 
       me = null;
 
+
       sessionReady =
         false;
+
+
+      updateSendState();
+
+
+      startingSession =
+        false;
+
 
       await signOut(
         auth
@@ -3350,12 +4081,11 @@ onAuthStateChanged(
 
 
       $("authScreen")
-        .classList
+        ?.classList
         .remove("hidden");
 
 
-      $("authError")
-        .textContent =
+      $("authError").textContent =
         "Não foi possível iniciar a sessão segura: " +
         msg;
     }
@@ -3368,17 +4098,48 @@ onAuthStateChanged(
 
 
 /* =========================================================
-   INPUT / ENVIO
+   BOTÃO ENVIAR
 ========================================================= */
 
-$("sendBtn").onclick =
-  sendMessage;
+if ($("sendBtn")) {
+
+  $("sendBtn").onclick =
+    () => {
+
+      /*
+       * Evita múltiplos envios simultâneos
+       * enquanto uma mensagem ainda está
+       * sendo processada.
+       */
+
+      if (
+        $("sendBtn").dataset.sending ===
+        "1"
+      ) {
+        return;
+      }
 
 
-$("messageInput")
-  .addEventListener(
+      sendMessage();
+    };
+}
+
+
+/* =========================================================
+   CAMPO DE MENSAGEM
+========================================================= */
+
+if ($("messageInput")) {
+
+  $("messageInput").addEventListener(
     "keydown",
     e => {
+
+      /*
+       * Enter sozinho envia.
+       *
+       * Shift + Enter cria nova linha.
+       */
 
       if (
         e.key === "Enter" &&
@@ -3393,16 +4154,21 @@ $("messageInput")
   );
 
 
-$("messageInput")
-  .addEventListener(
+  $("messageInput").addEventListener(
     "input",
     () => {
 
       const x =
         $("messageInput");
 
+
+      /*
+       * Ajuste automático da altura.
+       */
+
       x.style.height =
         "auto";
+
 
       x.style.height =
         Math.min(
@@ -3410,6 +4176,10 @@ $("messageInput")
           120
         ) + "px";
 
+
+      /*
+       * Indica que estamos digitando.
+       */
 
       saveStatus(
         true
@@ -3431,257 +4201,404 @@ $("messageInput")
         );
     }
   );
+}
 
 
 /* =========================================================
    ANEXOS
 ========================================================= */
 
-$("attachBtn").onclick =
-  () =>
-    $("fileInput").click();
+if ($("attachBtn")) {
+
+  $("attachBtn").onclick =
+    () =>
+      $("fileInput")?.click();
+}
 
 
-$("fileInput").onchange =
-  e => {
+if ($("fileInput")) {
 
-    selectedFile =
-      e.target.files?.[0] ||
-      null;
+  $("fileInput").onchange =
+    e => {
 
-    if (selectedFile) {
+      selectedFile =
+        e.target.files?.[0] ||
+        null;
 
-      showToast(
-        `${selectedFile.name} pronto para envio cifrado.`
-      );
-    }
-  };
+
+      if (selectedFile) {
+
+        showToast(
+          `${selectedFile.name} pronto para envio cifrado.`
+        );
+      }
+    };
+}
 
 
 /* =========================================================
    EMOJIS
 ========================================================= */
 
-$("emojiBtn").onclick =
-  () => {
+if ($("emojiBtn")) {
 
-    const p =
-      $("emojiPanel");
+  $("emojiBtn").onclick =
+    () => {
 
-    p.classList.toggle(
-      "hidden"
-    );
+      const panel =
+        $("emojiPanel");
 
 
-    if (!p.innerHTML) {
-
-      p.innerHTML =
-        EMOJIS
-          .map(
-            e =>
-              `<button type="button">${e}</button>`
-          )
-          .join("");
-    }
-
-
-    p.querySelectorAll(
-      "button"
-    ).forEach(
-      b => {
-
-        b.onclick =
-          () => {
-
-            const input =
-              $("messageInput");
-
-            input.setRangeText(
-              b.textContent,
-              input.selectionStart,
-              input.selectionEnd,
-              "end"
-            );
-
-            input.focus();
-          };
+      if (!panel) {
+        return;
       }
-    );
-  };
+
+
+      panel.classList.toggle(
+        "hidden"
+      );
+
+
+      /*
+       * Só cria o conteúdo uma vez.
+       */
+
+      if (!panel.innerHTML) {
+
+        panel.innerHTML =
+          EMOJIS
+            .map(
+              emoji =>
+                `<button type="button">${emoji}</button>`
+            )
+            .join("");
+      }
+
+
+      panel
+        .querySelectorAll(
+          "button"
+        )
+        .forEach(
+          button => {
+
+            button.onclick =
+              () => {
+
+                const input =
+                  $("messageInput");
+
+
+                if (!input) {
+                  return;
+                }
+
+
+                const start =
+                  input.selectionStart;
+
+
+                const end =
+                  input.selectionEnd;
+
+
+                input.setRangeText(
+                  button.textContent,
+                  start,
+                  end,
+                  "end"
+                );
+
+
+                input.focus();
+              };
+          }
+        );
+    };
+}
 
 
 /* =========================================================
-   PESQUISA
+   BUSCA
 ========================================================= */
 
-$("searchBtn").onclick =
-  () =>
-    $("searchBar")
-      .classList
-      .toggle("hidden");
+if ($("searchBtn")) {
+
+  $("searchBtn").onclick =
+    () =>
+      $("searchBar")
+        ?.classList
+        .toggle("hidden");
+}
 
 
-$("searchInput").oninput =
-  e => {
+if ($("searchInput")) {
 
-    searchText =
-      e.target.value;
+  $("searchInput").oninput =
+    e => {
 
-    renderMessages();
-  };
+      searchText =
+        e.target.value;
+
+
+      renderMessages();
+    };
+}
 
 
 /* =========================================================
    CONFIGURAÇÕES
 ========================================================= */
 
-$("settingsBtn").onclick =
-  () => {
+if ($("settingsBtn")) {
 
-    $("settingsModal")
-      .classList
-      .remove("hidden");
+  $("settingsBtn").onclick =
+    () => {
 
-    $("autoLock").checked =
-      localStorage.getItem(
-        "ep_auto_lock"
-      ) === "1";
-
-    $("safeNotifications").checked =
-      localStorage.getItem(
-        "ep_safe_notifications"
-      ) !== "0";
-
-    $("ttl").value =
-      String(ttlSeconds);
-  };
+      $("settingsModal")
+        ?.classList
+        .remove("hidden");
 
 
-$("closeSettings").onclick =
-  () =>
-    $("settingsModal")
-      .classList
-      .add("hidden");
+      if ($("autoLock")) {
+
+        $("autoLock").checked =
+          localStorage.getItem(
+            "ep_auto_lock"
+          ) === "1";
+      }
 
 
-$("autoLock").onchange =
-  e =>
-    localStorage.setItem(
-      "ep_auto_lock",
-      e.target.checked
-        ? "1"
-        : "0"
-    );
+      if ($("safeNotifications")) {
+
+        $("safeNotifications").checked =
+          localStorage.getItem(
+            "ep_safe_notifications"
+          ) !== "0";
+      }
 
 
-$("safeNotifications").onchange =
-  e =>
-    localStorage.setItem(
-      "ep_safe_notifications",
-      e.target.checked
-        ? "1"
-        : "0"
-    );
+      if ($("ttl")) {
+
+        $("ttl").value =
+          String(
+            ttlSeconds
+          );
+      }
+    };
+}
 
 
-$("ttl").onchange =
-  e => {
+if ($("closeSettings")) {
 
-    ttlSeconds =
-      Number(
-        e.target.value
+  $("closeSettings").onclick =
+    () =>
+      $("settingsModal")
+        ?.classList
+        .add("hidden");
+}
+
+
+if ($("autoLock")) {
+
+  $("autoLock").onchange =
+    e =>
+      localStorage.setItem(
+        "ep_auto_lock",
+        e.target.checked
+          ? "1"
+          : "0"
       );
-
-    localStorage.setItem(
-      "ep_ttl",
-      String(ttlSeconds)
-    );
-  };
+}
 
 
-$("hideNow").onclick =
-  () => {
+if ($("safeNotifications")) {
 
-    $("settingsModal")
-      .classList
-      .add("hidden");
+  $("safeNotifications").onchange =
+    e =>
+      localStorage.setItem(
+        "ep_safe_notifications",
+        e.target.checked
+          ? "1"
+          : "0"
+      );
+}
 
-    enterPanic();
-  };
+
+if ($("ttl")) {
+
+  $("ttl").onchange =
+    e => {
+
+      ttlSeconds =
+        Number(
+          e.target.value
+        );
+
+
+      localStorage.setItem(
+        "ep_ttl",
+        String(
+          ttlSeconds
+        )
+      );
+    };
+}
+
+
+/* =========================================================
+   ESCONDER AGORA / MODO DISFARCE
+========================================================= */
+
+if ($("hideNow")) {
+
+  $("hideNow").onclick =
+    () => {
+
+      $("settingsModal")
+        ?.classList
+        .add("hidden");
+
+      enterPanic();
+    };
+}
 
 
 /* =========================================================
    LOGOUT
 ========================================================= */
 
-$("logoutBtn").onclick =
-  async () => {
+if ($("logoutBtn")) {
 
-    await saveStatus(
-      false
-    );
+  $("logoutBtn").onclick =
+    async () => {
 
-    unsubscribeMessages?.();
+      try {
 
-    unsubscribeKeys?.();
+        await saveStatus(
+          false
+        );
 
-    unsubscribeStatus?.();
+      } catch (e) {
+
+        console.warn(
+          "Não foi possível atualizar o status antes do logout:",
+          e
+        );
+      }
 
 
-    if (
-      messageListenerRetry
-    ) {
+      /*
+       * Remove listeners.
+       */
 
-      clearTimeout(
+      unsubscribeMessages?.();
+
+      unsubscribeKeys?.();
+
+      unsubscribeStatus?.();
+
+
+      /*
+       * Cancela tentativa de reconexão.
+       */
+
+      if (
         messageListenerRetry
+      ) {
+
+        clearTimeout(
+          messageListenerRetry
+        );
+
+        messageListenerRetry =
+          null;
+      }
+
+
+      /*
+       * Marca a sessão como encerrada.
+       */
+
+      sessionReady =
+        false;
+
+      keysReady =
+        false;
+
+      messagesReady =
+        false;
+
+      statusReady =
+        false;
+
+      updateSendState();
+
+
+      /*
+       * Sai do Firebase.
+       */
+
+      await signOut(
+        auth
       );
 
-      messageListenerRetry =
-        null;
-    }
 
+      /*
+       * Recarrega a aplicação.
+       */
 
-    await signOut(
-      auth
-    );
-
-
-    location.reload();
-  };
+      location.reload();
+    };
+}
 
 
 /* =========================================================
-   OUTROS EVENTOS
+   FIXAÇÃO
 ========================================================= */
 
-$("pinned").onclick =
-  () => {};
+if ($("pinned")) {
 
+  $("pinned").onclick =
+    () => {};
+}
+
+
+/* =========================================================
+   FECHAR MENUS
+========================================================= */
 
 document.addEventListener(
   "click",
-  () =>
+  () => {
+
     document
       .querySelectorAll(
         ".menu"
       )
       .forEach(
         x => x.remove()
-      )
+      );
+  }
 );
 
 
 /* =========================================================
-   VISIBILIDADE DA PÁGINA
+   VISIBILITY CHANGE
 ========================================================= */
 
 window.addEventListener(
   "visibilitychange",
-  async () => {
+  () => {
 
     if (
       document.hidden
     ) {
+
+      /*
+       * Ao sair da aba, informa que não
+       * estamos ativos.
+       */
 
       saveStatus(
         false
@@ -3689,40 +4606,38 @@ window.addEventListener(
 
     } else {
 
-      updateActivity();
-
       /*
-       * Ao voltar para a página,
-       * garantimos que o token Firebase
-       * ainda está válido e reativamos
-       * os listeners.
+       * Ao retornar, atualiza atividade
+       * e marca mensagens como vistas.
        */
 
-      try {
+      updateActivity();
 
-        if (
-          auth.currentUser
-        ) {
-
-          await getIdToken(
-            auth.currentUser,
-            true
-          );
-        }
-
-      } catch (e) {
-
-        console.warn(
-          "Falha ao atualizar token após retorno:",
-          e
+      markSeen()
+        .catch(
+          () => {}
         );
-      }
 
+
+      /*
+       * Se a página voltou e a sessão
+       * deixou de estar pronta por algum
+       * motivo, reconstruímos os listeners.
+       */
 
       if (
-        sessionReady &&
+        me &&
+        !sessionReady &&
         navigator.onLine
       ) {
+
+        connectionState =
+          "reconnecting";
+
+        updateConnectionState(
+          "reconectando…"
+        );
+
 
         listenKeys();
 
@@ -3730,9 +4645,6 @@ window.addEventListener(
 
         listenStatus();
       }
-
-
-      markSeen();
     }
   }
 );
@@ -3744,10 +4656,20 @@ window.addEventListener(
 
 window.addEventListener(
   "pagehide",
-  () =>
+  () => {
+
+    /*
+     * Não fazemos signOut aqui.
+     *
+     * O Firebase Auth deve preservar
+     * a sessão normalmente para que
+     * Ctrl+R não force novo login.
+     */
+
     saveStatus(
       false
-    )
+    );
+  }
 );
 
 
@@ -3755,15 +4677,47 @@ window.addEventListener(
    SERVICE WORKER
 ========================================================= */
 
-if ("serviceWorker" in navigator) {
+if (
+  "serviceWorker" in navigator
+) {
+
   navigator.serviceWorker
-    .register("./sw.js", {
-      updateViaCache: "none"
-    })
-    .then(registration => {
-      registration.update();
-    })
-    .catch(error => {
-      console.warn("Service Worker:", error);
-    });
+    .register(
+      "./sw.js",
+      {
+        /*
+         * Fundamental durante o
+         * desenvolvimento para evitar
+         * que o próprio sw.js seja
+         * reutilizado do cache.
+         */
+        updateViaCache: "none"
+      }
+    )
+    .then(
+      registration => {
+
+        /*
+         * Verifica imediatamente se
+         * existe uma versão nova.
+         */
+
+        registration.update();
+
+      }
+    )
+    .catch(
+      error => {
+
+        console.warn(
+          "Service Worker:",
+          error
+        );
+      }
+    );
 }
+
+
+/* =========================================================
+   FIM DO APP.JS
+========================================================= */
