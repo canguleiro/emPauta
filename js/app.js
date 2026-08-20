@@ -125,18 +125,31 @@ async function idbDelete(k){
 }
 
 async function ensureIdentity(){
-  const saved = await idbGet(`privateKey:${me.uid}`);
-  if(saved){
-    privateKey = saved;
-    publicKeyJwk = await crypto.subtle.exportKey("jwk", privateKey.publicKey);
+  const storageKey = `privateKey:${me.uid}`;
+  const saved = await idbGet(storageKey);
+
+  if(saved?.privateKey && saved?.publicKeyJwk){
+    // A chave privada fica armazenada como CryptoKey não exportável.
+    privateKey = saved.privateKey;
+    publicKeyJwk = saved.publicKeyJwk;
   } else {
+    // O par é exportável apenas durante a inicialização. Depois,
+    // a chave privada é reimportada como não exportável antes de ser salva.
     const pair = await crypto.subtle.generateKey(
-      {name:"ECDH", namedCurve:"P-256"}, false, ["deriveBits"]
+      {name:"ECDH", namedCurve:"P-256"}, true, ["deriveBits"]
     );
-    privateKey = pair.privateKey;
-    publicKeyJwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
-    await idbPut(`privateKey:${me.uid}`, pair);
+    const exportedPublic = await crypto.subtle.exportKey("jwk", pair.publicKey);
+    const exportedPrivate = await crypto.subtle.exportKey("jwk", pair.privateKey);
+    const lockedPrivate = await crypto.subtle.importKey(
+      "jwk", exportedPrivate,
+      {name:"ECDH", namedCurve:"P-256"},
+      false, ["deriveBits"]
+    );
+    privateKey = lockedPrivate;
+    publicKeyJwk = exportedPublic;
+    await idbPut(storageKey, {privateKey: lockedPrivate, publicKeyJwk});
   }
+
   await setDoc(doc(KEYS, me.uid), {
     uid: me.uid,
     publicKey: publicKeyJwk,
@@ -643,30 +656,61 @@ async function start(){
   }
 }
 
+let startingSession = false;
+
 $("authForm").onsubmit=async e=>{
   e.preventDefault();
   $("authError").textContent="";
+  const email=$("email").value.trim();
+  const password=$("password").value;
+  const nickname=$("nickname").value.trim();
+  if(!nickname){
+    $("authError").textContent="Informe um nome/apelido para este dispositivo.";
+    return;
+  }
+  // Guardamos o apelido temporariamente porque o Firebase concluirá o login
+  // de forma assíncrona e onAuthStateChanged será o único ponto que inicia a sessão.
+  sessionStorage.setItem("ep_pending_nick", nickname);
   try{
-    const cred=await signInWithEmailAndPassword(auth,$("email").value.trim(),$("password").value);
-    me=cred.user;
-    myNick=$("nickname").value.trim();
-    if(!myNick) throw new Error("Informe um nome/apelido.");
-    localStorage.setItem("ep_nick_"+me.uid,myNick);
-    await start();
+    await signInWithEmailAndPassword(auth,email,password);
   }catch(err){
+    sessionStorage.removeItem("ep_pending_nick");
     console.error(err);
     $("authError").textContent=err.code==="auth/invalid-credential"?"E-mail ou senha inválidos.":(err.message||"Não foi possível entrar.");
   }
 };
 
 onAuthStateChanged(auth,async user=>{
-  if(user && !me){
-    me=user;
-    myNick=localStorage.getItem("ep_nick_"+me.uid)||"";
-    if(myNick){
-      try{await start();}catch(e){me=null;$("authScreen").classList.remove("hidden");$("authError").textContent=e.message;}
-    }
+  if(!user){
+    me=null;
+    return;
   }
+  if(startingSession || me?.uid===user.uid) return;
+  startingSession=true;
+  me=user;
+  const pendingNick=sessionStorage.getItem("ep_pending_nick")||"";
+  myNick=pendingNick||localStorage.getItem("ep_nick_"+me.uid)||"";
+  if(!myNick){
+    startingSession=false;
+    me=null;
+    await signOut(auth).catch(()=>{});
+    $("authScreen").classList.remove("hidden");
+    return;
+  }
+  localStorage.setItem("ep_nick_"+me.uid,myNick);
+  sessionStorage.removeItem("ep_pending_nick");
+  try{
+    await start();
+  }catch(e){
+    console.error("Falha ao iniciar sessão segura:",e);
+    const msg=e?.message||"Não foi possível iniciar a sessão segura.";
+    me=null;
+    startingSession=false;
+    await signOut(auth).catch(()=>{});
+    $("authScreen").classList.remove("hidden");
+    $("authError").textContent="Não foi possível iniciar a sessão segura: "+msg;
+  }
+  startingSession=false;
 });
 
 $("sendBtn").onclick=sendMessage;
