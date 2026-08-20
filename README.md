@@ -1,4 +1,4 @@
-# Em Pauta Privado — V5
+# Em Pauta Privado — V6
 
 Versão preparada para o seu Firebase atual e para publicação pelo GitHub Pages.
 

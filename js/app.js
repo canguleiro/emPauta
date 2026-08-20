@@ -31,7 +31,6 @@ const ROOM_ID = "private-room";
 const MSGS = collection(db, "private", ROOM_ID, "messages");
 const STATUS = collection(db, "private", ROOM_ID, "status");
 const KEYS = collection(db, "private", ROOM_ID, "keys");
-const SETTINGS = doc(db, "private", ROOM_ID, "settings");
 
 const $ = id => document.getElementById(id);
 const enc = new TextEncoder();
