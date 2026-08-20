@@ -34,13 +34,13 @@
     <div class="head-left">
       <div class="avatar" id="myAvatar">EP</div>
       <div>
-        <div class="head-name">Conversa privada</div>
+        <div class="head-name">Pautas</div>
         <div class="head-status" id="status">A iniciar sessão segura…</div>
       </div>
     </div>
     <div class="actions">
       <button class="icon" id="searchBtn" title="Pesquisar">⌕</button>
-      <button class="icon" id="panicBtn" title="Disfarçar">▣</button>
+      <button class="icon" id="panicBtn" title="Anotações">▣</button>
       <button class="icon" id="settingsBtn" title="Configurações">⋮</button>
     </div>
   </header>
@@ -69,10 +69,8 @@
       <div class="setting"><span>Bloquear automaticamente</span><input id="autoLock" class="switch" type="checkbox"></div>
       <div class="setting"><span>Notificações sem conteúdo</span><input id="safeNotifications" class="switch" type="checkbox" checked></div>
       <div class="setting"><span>Mensagens temporárias</span><select id="ttl" class="field field-auto"><option value="0">Nunca</option><option value="3600">1 hora</option><option value="21600">6 horas</option><option value="86400">24 horas</option><option value="604800">7 dias</option></select></div>
-      <div class="setting"><span>Modo disfarce</span><button class="secondary" id="hideNow">Ativar agora</button></div>
+      <div class="setting"><span>Modo Anotações</span><button class="secondary" id="hideNow">Ativar agora</button></div>
       <div class="settings-action"><button class="primary" id="logoutBtn">Sair deste dispositivo</button></div>
-      <p class="tiny settings-note">Importante: esta versão usa ECDH P-256 + HKDF-SHA-256 + AES-256-GCM para cifrar o conteúdo antes do Firebase. Isso protege o conteúdo armazenado e em trânsito, mas não transforma um celular comprometido em um ambiente confiável.</p>
-    </div>
   </section>
 
   <section id="lockScreen" class="lock hidden">
