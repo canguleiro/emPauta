@@ -1,0 +1,12 @@
+{
+  "name": "Em Pauta Privado",
+  "short_name": "Notas",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0b3d35",
+  "theme_color": "#0b3d35",
+  "description": "Comunicador privado para duas pessoas.",
+  "icons": [
+    {"src":"./icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
+  ]
+}
