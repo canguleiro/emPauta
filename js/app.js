@@ -554,7 +554,8 @@ async function sendMessage(){
       createdAt:serverTimestamp(),
       createdAtMs:Date.now(),
       seenBy:[me.uid],
-      edited:false
+      edited:false,
+      reactions:{}
     });
     input.value="";
     input.style.height="auto";
