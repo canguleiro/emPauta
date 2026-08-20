@@ -1284,12 +1284,28 @@ textarea{
       min(46vw,220px);
   }
 
-.icon{
-  width:70px;
-  height:70px;
-  min-width:70px;
-  font-size:23px;
-}
+header .actions{
+    display:flex;
+    align-items:center;
+    gap:2px;
+    flex:none;
+  }
+
+  header .actions .icon{
+    width:48px;
+    height:48px;
+    min-width:48px;
+    min-height:48px;
+
+    padding:0;
+
+    display:grid;
+    place-items:center;
+
+    font-size:25px;
+
+    flex:none;
+  }
 
   .chat{
     padding:
@@ -1385,14 +1401,20 @@ textarea{
   }
 
   .actions{
-    gap:3;
+    gap:3px;
   }
 
-  .icon{
-    width:68px;
-    height:68px;
+  header .actions{
+    gap:1px;
+  }
 
-    font-size:28px;
+  header .actions .icon{
+    width:46px;
+    height:46px;
+    min-width:46px;
+    min-height:46px;
+
+    font-size:24px;
   }
 
   .circle{
