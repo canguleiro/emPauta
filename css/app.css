@@ -1323,7 +1323,7 @@ header .actions{
   }
 
   .text{
-    font-size:14px;
+    font-size:16px;
   }
 
   .composer{
@@ -1388,15 +1388,15 @@ header .actions{
     width:34px;
     height:34px;
 
-    font-size:13px;
+    font-size:15px;
   }
 
   .head-name{
-    font-size:13px;
+    font-size:15px;
   }
 
   .head-status{
-    font-size:10px;
+    font-size:12px;
 
     max-width:38vw;
   }
