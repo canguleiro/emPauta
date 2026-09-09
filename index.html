@@ -7,91 +7,491 @@
   <meta name="description" content="Comunicador privado de duas pessoas.">
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://www.gstatic.com https://*.firebasedatabase.app https://firebasestorage.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com; script-src 'self' https://www.gstatic.com; style-src 'self'; img-src 'self' blob: data: https://firebasestorage.googleapis.com; media-src 'self' blob: https://firebasestorage.googleapis.com; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self';">
+
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
-  <title>Notas</title>
-  <link rel="stylesheet" href="./css/app.css?v=3">
 
+  <title>Notas</title>
+
+  <link rel="stylesheet" href="./css/app.css?v=3">
 </head>
+
 <body>
+
 <div class="app" id="app">
+
+  <!-- =========================
+       AUTENTICAÇÃO
+       ========================= -->
   <section class="screen" id="authScreen">
+
     <div class="card">
+
       <div class="brand">Em Pauta</div>
       <div class="sub">notas</div>
+
       <form id="authForm">
-        <input class="field" id="email" type="email" autocomplete="username" placeholder="E-mail" required>
-        <input class="field" id="password" type="password" autocomplete="current-password" placeholder="Senha" required>
-        <input class="field" id="nickname" type="text" maxlength="40" placeholder="Nome/apelido deste dispositivo" required>
-        <button class="primary" type="submit">Entrar</button>
+
+        <input
+          class="field"
+          id="email"
+          type="email"
+          autocomplete="username"
+          placeholder="E-mail"
+          required
+        >
+
+        <input
+          class="field"
+          id="password"
+          type="password"
+          autocomplete="current-password"
+          placeholder="Senha"
+          required
+        >
+
+        <input
+          class="field"
+          id="nickname"
+          type="text"
+          maxlength="40"
+          placeholder="Nome/apelido deste dispositivo"
+          required
+        >
+
+        <button class="primary" type="submit">
+          Entrar
+        </button>
+
         <div class="error" id="authError"></div>
+
       </form>
-      <p class="tiny">O acesso usa a conta deste dispositivo. O conteúdo da conversa é cifrado no navegador antes de ser enviado ao Firebase.</p>
+
+      <p class="tiny">
+        O acesso usa a conta deste dispositivo.
+        O conteúdo da conversa é cifrado no navegador antes de ser enviado ao Firebase.
+      </p>
+
     </div>
+
   </section>
 
+
+  <!-- =========================
+       CABEÇALHO
+       ========================= -->
   <header id="header" class="hidden">
+
     <div class="head-left">
-      <div class="avatar" id="myAvatar">EP</div>
-      <div>
-        <div class="head-name">Pautas</div>
-        <div class="head-status" id="status">A iniciar sessão segura…</div>
+
+      <div class="avatar" id="myAvatar">
+        EP
       </div>
+
+      <div>
+
+        <div class="head-name">
+          Pautas
+        </div>
+
+        <div class="head-status" id="status">
+          A iniciar sessão segura…
+        </div>
+
+      </div>
+
     </div>
+
     <div class="actions">
-      <button class="icon" id="searchBtn" title="Pesquisar">⌕</button>
-      <button class="icon" id="panicBtn" title="Anotações">▣</button>
-      <button class="icon" id="settingsBtn" title="Configurações">⋮</button>
+
+      <button
+        class="icon"
+        id="searchBtn"
+        title="Pesquisar"
+      >
+        ⌕
+      </button>
+
+      <button
+        class="icon"
+        id="panicBtn"
+        title="Anotações"
+      >
+        ▣
+      </button>
+
+      <button
+        class="icon"
+        id="settingsBtn"
+        title="Configurações"
+      >
+        ⋮
+      </button>
+
     </div>
+
   </header>
 
-  <div id="searchBar" class="search hidden"><input id="searchInput" type="search" placeholder="Pesquisar na conversa…"></div>
 
-  <div id="pinned" class="pinned hidden"></div>
-  <main id="chat" class="chat"></main>
+  <!-- =========================
+       PESQUISA
+       ========================= -->
+  <div
+    id="searchBar"
+    class="search hidden"
+  >
+    <input
+      id="searchInput"
+      type="search"
+      placeholder="Pesquisar na conversa…"
+    >
+  </div>
 
-  <div id="replyBar" class="replybar hidden"><span id="replyText"></span><button id="cancelReply" class="secondary">×</button></div>
 
-  <footer id="footer" class="hidden">
-    <div id="emojiPanel" class="emoji-panel hidden"></div>
+  <!-- =========================
+       MENSAGEM FIXADA
+       ========================= -->
+  <div
+    id="pinned"
+    class="pinned hidden"
+  ></div>
+
+
+  <!-- =========================
+       CONVERSA
+       ========================= -->
+  <main
+    id="chat"
+    class="chat"
+  ></main>
+
+
+  <!-- =========================
+       RESPOSTA
+       ========================= -->
+  <div
+    id="replyBar"
+    class="replybar hidden"
+  >
+
+    <span id="replyText"></span>
+
+    <button
+      id="cancelReply"
+      class="secondary"
+    >
+      ×
+    </button>
+
+  </div>
+
+
+  <!-- =========================
+       COMPOSITOR
+       ========================= -->
+  <footer
+    id="footer"
+    class="hidden"
+  >
+
+    <div
+      id="emojiPanel"
+      class="emoji-panel hidden"
+    ></div>
+
     <div class="composer">
-      <input id="fileInput" type="file" class="hidden" accept="image/*,audio/*">
-      <button class="circle" id="attachBtn" title="Anexar">＋</button>
-      <div class="input-wrap"><textarea id="messageInput" rows="1" maxlength="10000" placeholder="Mensagem"></textarea></div>
-      <button class="circle" id="emojiBtn" title="Emojis">☺</button>
-      <button class="circle send" id="sendBtn" title="Enviar">➤</button>
+
+      <input
+        id="fileInput"
+        type="file"
+        class="hidden"
+        accept="image/*,audio/*"
+      >
+
+      <button
+        class="circle"
+        id="attachBtn"
+        title="Anexar"
+      >
+        ＋
+      </button>
+
+      <div class="input-wrap">
+
+        <textarea
+          id="messageInput"
+          rows="1"
+          maxlength="10000"
+          placeholder="Mensagem"
+        ></textarea>
+
+      </div>
+
+      <button
+        class="circle"
+        id="emojiBtn"
+        title="Emojis"
+      >
+        ☺
+      </button>
+
+      <button
+        class="circle send"
+        id="sendBtn"
+        title="Enviar"
+      >
+        ➤
+      </button>
+
     </div>
+
   </footer>
 
-  <section id="settingsModal" class="modal hidden">
+
+  <!-- =========================
+       CONFIGURAÇÕES / PRIVACIDADE
+       ========================= -->
+  <section
+    id="settingsModal"
+    class="modal hidden"
+  >
+
     <div class="modal-card">
-      <div class="modal-head"><strong>Privacidade</strong><button class="secondary" id="closeSettings">Fechar</button></div>
-      <div class="setting"><span>Bloquear automaticamente</span><input id="autoLock" class="switch" type="checkbox"></div>
-      <div class="setting"><span>Notificações sem conteúdo</span><input id="safeNotifications" class="switch" type="checkbox" checked></div>
-      <div class="setting"><span>Mensagens temporárias</span><select id="ttl" class="field field-auto"><option value="0">Nunca</option><option value="3600">1 hora</option><option value="21600">6 horas</option><option value="86400">24 horas</option><option value="604800">7 dias</option></select></div>
-      <div class="setting"><span>Modo Anotações</span><button class="secondary" id="hideNow">Ativar agora</button></div>
-      <div class="settings-action"><button class="primary" id="logoutBtn">Sair deste dispositivo</button></div>
-  </section>
 
-  <section id="lockScreen" class="lock hidden">
-    <div class="lock-card">
-      <div class="lock-icon">🔒</div>
-      <h2 class="lock-title">Sessão bloqueada</h2>
-      <div class="tiny lock-help">Digite o PIN deste dispositivo</div>
-      <div class="pin-dots" id="pinDots"></div>
-      <div class="pinpad" id="pinpad"></div>
-      <button id="biometricBtn" class="secondary biometric-btn">Ativar biometria deste dispositivo</button>
+      <div class="modal-head">
+
+        <strong>
+          Privacidade
+        </strong>
+
+        <button
+          class="secondary"
+          id="closeSettings"
+        >
+          Fechar
+        </button>
+
+      </div>
+
+
+      <!-- BLOQUEIO AUTOMÁTICO -->
+      <div class="setting">
+
+        <span>
+          Bloquear automaticamente
+        </span>
+
+        <input
+          id="autoLock"
+          class="switch"
+          type="checkbox"
+        >
+
+      </div>
+
+
+      <!-- NOTIFICAÇÕES -->
+      <div class="setting">
+
+        <span>
+          Notificações sem conteúdo
+        </span>
+
+        <input
+          id="safeNotifications"
+          class="switch"
+          type="checkbox"
+          checked
+        >
+
+      </div>
+
+
+      <!-- MENSAGENS TEMPORÁRIAS -->
+      <div class="setting">
+
+        <span>
+          Mensagens temporárias
+        </span>
+
+        <select
+          id="ttl"
+          class="field field-auto"
+        >
+          <option value="0">
+            Nunca
+          </option>
+
+          <option value="3600">
+            1 hora
+          </option>
+
+          <option value="21600">
+            6 horas
+          </option>
+
+          <option value="86400">
+            24 horas
+          </option>
+
+          <option value="604800">
+            7 dias
+          </option>
+        </select>
+
+      </div>
+
+
+      <!-- MODO ANOTAÇÕES -->
+      <div class="setting">
+
+        <span>
+          Modo Anotações
+        </span>
+
+        <button
+          class="secondary"
+          id="hideNow"
+        >
+          Ativar agora
+        </button>
+
+      </div>
+
+
+      <!-- LIMPAR TODAS AS MENSAGENS -->
+      <div class="settings-action">
+
+        <button
+          class="secondary danger-button"
+          id="clearMessagesBtn"
+          type="button"
+        >
+          🗑️ Limpar todas as mensagens
+        </button>
+
+      </div>
+
+
+      <!-- SAIR -->
+      <div class="settings-action">
+
+        <button
+          class="primary"
+          id="logoutBtn"
+        >
+          Sair deste dispositivo
+        </button>
+
+      </div>
+
     </div>
+
   </section>
 
-  <section id="panicScreen" class="panic hidden">
-    <div class="panicbar"><span>Ficheiro</span><span>Editar</span><span>Formatar</span><span>Ver</span><span id="panicUnlock" class="panic-unlock">•••</span></div>
-    <textarea id="panicText" placeholder="Notas..."></textarea>
+
+  <!-- =========================
+       TELA DE BLOQUEIO
+       ========================= -->
+  <section
+    id="lockScreen"
+    class="lock hidden"
+  >
+
+    <div class="lock-card">
+
+      <div class="lock-icon">
+        🔒
+      </div>
+
+      <h2 class="lock-title">
+        Sessão bloqueada
+      </h2>
+
+      <div class="tiny lock-help">
+        Digite o PIN deste dispositivo
+      </div>
+
+      <div
+        class="pin-dots"
+        id="pinDots"
+      ></div>
+
+      <div
+        class="pinpad"
+        id="pinpad"
+      ></div>
+
+      <button
+        id="biometricBtn"
+        class="secondary biometric-btn"
+      >
+        Ativar biometria deste dispositivo
+      </button>
+
+    </div>
+
   </section>
 
-  <div id="toast" class="toast hidden"></div>
+
+  <!-- =========================
+       MODO ANOTAÇÕES
+       ========================= -->
+  <section
+    id="panicScreen"
+    class="panic hidden"
+  >
+
+    <div class="panicbar">
+
+      <span>
+        Ficheiro
+      </span>
+
+      <span>
+        Editar
+      </span>
+
+      <span>
+        Formatar
+      </span>
+
+      <span>
+        Ver
+      </span>
+
+      <span
+        id="panicUnlock"
+        class="panic-unlock"
+      >
+        •••
+      </span>
+
+    </div>
+
+    <textarea
+      id="panicText"
+      placeholder="Notas..."
+    ></textarea>
+
+  </section>
+
+
+  <!-- =========================
+       TOAST
+       ========================= -->
+  <div
+    id="toast"
+    class="toast hidden"
+  ></div>
+
 </div>
 
-<script type="module" src="./js/app.js"></script>
+
+<script
+  type="module"
+  src="./js/app.js"
+></script>
+
 </body>
 </html>
