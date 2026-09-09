@@ -89,6 +89,14 @@ button,
   box-shadow:0 0 30px #0002;
 }
 
+.danger-button{
+  width:100%;
+  margin-top:18px;
+  color:#b42318;
+  border:1px solid #f0c4c0;
+  background:#fff5f4;
+}
+
 
 /* =========================================================
    TELAS
