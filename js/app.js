@@ -2085,26 +2085,33 @@ async function deleteMessage(m) {
     return;
   }
 
-
   try {
 
     await deleteDoc(
       doc(MSGS, m.id)
     );
 
-    if (
-      m.data.media?.path
-    ) {
+    /*
+     * Os anexos são armazenados usando o ID
+     * da própria mensagem:
+     *
+     * private/private-room/media/{id}.bin
+     *
+     * Portanto podemos remover o anexo diretamente
+     * pelo ID, sem precisar descriptografar a mensagem.
+     */
 
-      await deleteObject(
-        ref(
-          storage,
-          m.data.media.path
-        )
-      ).catch(
-        () => {}
+    const mediaRef =
+      ref(
+        storage,
+        `private/${ROOM_ID}/media/${m.id}.bin`
       );
-    }
+
+    await deleteObject(
+      mediaRef
+    ).catch(
+      () => {}
+    );
 
   } catch (e) {
 
@@ -2116,6 +2123,226 @@ async function deleteMessage(m) {
     showToast(
       "Falha ao apagar."
     );
+  }
+}
+
+
+/* =========================================================
+   LIMPAR TODAS AS MENSAGENS
+========================================================= */
+
+async function clearAllMessages() {
+
+  if (!me) {
+
+    showToast(
+      "Sessão não autenticada."
+    );
+
+    return;
+  }
+
+
+  /*
+   * Primeira confirmação.
+   */
+
+  const firstConfirm =
+    confirm(
+      "ATENÇÃO!\n\nIsso apagará TODAS as mensagens da conversa para os dois dispositivos.\n\nDeseja continuar?"
+    );
+
+  if (!firstConfirm) {
+    return;
+  }
+
+
+  /*
+   * Segunda confirmação.
+   */
+
+  const secondConfirm =
+    confirm(
+      "CONFIRMAÇÃO FINAL:\n\nTodas as mensagens e anexos serão apagados permanentemente.\n\nEsta ação não pode ser desfeita.\n\nApagar tudo?"
+    );
+
+  if (!secondConfirm) {
+    return;
+  }
+
+
+  const button =
+    $("clearMessagesBtn");
+
+
+  if (button) {
+
+    button.disabled =
+      true;
+
+    button.textContent =
+      "⏳ Apagando mensagens…";
+  }
+
+
+  let totalDeleted = 0;
+
+
+  try {
+
+    /*
+     * Atualiza o token antes da operação.
+     */
+
+    if (auth.currentUser) {
+
+      await getIdToken(
+        auth.currentUser,
+        true
+      );
+    }
+
+
+    /*
+     * Trabalhamos em lotes de 100.
+     *
+     * Sempre buscamos novamente o primeiro lote
+     * restante. Dessa forma nenhum documento é
+     * pulado enquanto os anteriores são apagados.
+     */
+
+    while (true) {
+
+      const q =
+        query(
+          MSGS,
+          orderBy(
+            "createdAtMs",
+            "asc"
+          ),
+          limit(100)
+        );
+
+
+      const snap =
+        await getDocs(q);
+
+
+      /*
+       * Não existem mais mensagens.
+       */
+
+      if (snap.empty) {
+        break;
+      }
+
+
+      const docs =
+        snap.docs;
+
+
+      /*
+       * Remove os anexos associados.
+       *
+       * Se determinada mensagem não possuir anexo,
+       * deleteObject simplesmente falhará e será
+       * ignorado.
+       */
+
+      await Promise.allSettled(
+        docs.map(
+          d =>
+            deleteObject(
+              ref(
+                storage,
+                `private/${ROOM_ID}/media/${d.id}.bin`
+              )
+            )
+        )
+      );
+
+
+      /*
+       * Agora remove os documentos das mensagens.
+       */
+
+      for (const d of docs) {
+
+        await deleteDoc(
+          doc(MSGS, d.id)
+        );
+
+        totalDeleted++;
+      }
+
+
+      /*
+       * Mostra o progresso no próprio botão.
+       */
+
+      if (button) {
+
+        button.textContent =
+          `⏳ ${totalDeleted} mensagem(ns) apagada(s)…`;
+      }
+
+    }
+
+
+    /*
+     * Limpa imediatamente o estado local.
+     */
+
+    messages = [];
+
+    replyTarget = null;
+
+
+    $("replyBar")
+      ?.classList
+      .add("hidden");
+
+
+    renderMessages();
+
+
+    /*
+     * Resultado para o usuário.
+     */
+
+    showToast(
+      totalDeleted > 0
+        ? `${totalDeleted} mensagem(ns) apagada(s) para os dois.`
+        : "A conversa já estava vazia."
+    );
+
+
+  } catch (e) {
+
+    console.error(
+      "Falha ao limpar todas as mensagens:",
+      e
+    );
+
+
+    showToast(
+      e?.code === "permission-denied"
+        ? "Sem autorização para limpar a conversa."
+        : "Não foi possível limpar todas as mensagens."
+    );
+
+
+  } finally {
+
+    if (button) {
+
+      button.disabled =
+        false;
+
+      button.textContent =
+        "🗑️ Limpar todas as mensagens";
+    }
+
   }
 }
 
