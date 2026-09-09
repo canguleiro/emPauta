@@ -4625,6 +4625,27 @@ if ($("closeSettings")) {
         .add("hidden");
 }
 
+/* =========================================================
+   LIMPAR TODAS AS MENSAGENS
+========================================================= */
+
+if ($("clearMessagesBtn")) {
+
+  $("clearMessagesBtn").onclick =
+    async () => {
+
+      /*
+       * Fecha a janela de configurações.
+       */
+
+      $("settingsModal")
+        ?.classList
+        .add("hidden");
+
+      await clearAllMessages();
+    };
+}
+
 
 if ($("autoLock")) {
 
