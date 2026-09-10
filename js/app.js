@@ -2085,6 +2085,7 @@ async function deleteMessage(m) {
     return;
   }
 
+
   try {
 
     await deleteDoc(
@@ -2092,13 +2093,13 @@ async function deleteMessage(m) {
     );
 
     /*
-     * Os anexos são armazenados usando o ID
-     * da própria mensagem:
+     * Os anexos são armazenados usando o próprio
+     * ID da mensagem:
      *
      * private/private-room/media/{id}.bin
      *
-     * Portanto podemos remover o anexo diretamente
-     * pelo ID, sem precisar descriptografar a mensagem.
+     * Portanto conseguimos remover o arquivo sem
+     * precisar descriptografar a mensagem.
      */
 
     const mediaRef =
@@ -2131,25 +2132,32 @@ async function deleteMessage(m) {
    LIMPAR TODAS AS MENSAGENS
 ========================================================= */
 
+/*
+ * Remove TODAS as mensagens da sala para os dois usuários.
+ *
+ * A função trabalha em páginas pequenas e sempre busca
+ * novamente o primeiro lote restante. Assim não existe o
+ * problema de pular documentos enquanto eles são apagados.
+ *
+ * Os anexos também são removidos. Como o nome do arquivo
+ * no Storage é baseado no ID do documento da mensagem,
+ * não é necessário descriptografar o conteúdo para saber
+ * qual arquivo deve ser excluído.
+ */
+
 async function clearAllMessages() {
 
   if (!me) {
-
     showToast(
       "Sessão não autenticada."
     );
-
     return;
   }
 
 
-  /*
-   * Primeira confirmação.
-   */
-
   const firstConfirm =
     confirm(
-      "ATENÇÃO!\n\nIsso apagará TODAS as mensagens da conversa para os dois dispositivos.\n\nDeseja continuar?"
+      "ATENÇÃO! Isso apagará TODAS as mensagens da conversa para os dois dispositivos.\n\nDeseja continuar?"
     );
 
   if (!firstConfirm) {
@@ -2157,13 +2165,9 @@ async function clearAllMessages() {
   }
 
 
-  /*
-   * Segunda confirmação.
-   */
-
   const secondConfirm =
     confirm(
-      "CONFIRMAÇÃO FINAL:\n\nTodas as mensagens e anexos serão apagados permanentemente.\n\nEsta ação não pode ser desfeita.\n\nApagar tudo?"
+      "CONFIRMAÇÃO FINAL:\n\nTodas as mensagens e anexos serão apagados permanentemente. Esta ação não pode ser desfeita.\n\nApagar tudo?"
     );
 
   if (!secondConfirm) {
@@ -2191,7 +2195,9 @@ async function clearAllMessages() {
   try {
 
     /*
-     * Atualiza o token antes da operação.
+     * Renovamos o token antes da operação,
+     * seguindo a mesma proteção utilizada
+     * no envio de mensagens.
      */
 
     if (auth.currentUser) {
@@ -2204,11 +2210,12 @@ async function clearAllMessages() {
 
 
     /*
-     * Trabalhamos em lotes de 100.
+     * Buscamos sempre o primeiro lote restante.
      *
-     * Sempre buscamos novamente o primeiro lote
-     * restante. Dessa forma nenhum documento é
-     * pulado enquanto os anteriores são apagados.
+     * Não usamos startAfter() porque os documentos
+     * são removidos durante a operação; buscar
+     * novamente o primeiro lote evita que algum
+     * documento seja pulado.
      */
 
     while (true) {
@@ -2228,10 +2235,6 @@ async function clearAllMessages() {
         await getDocs(q);
 
 
-      /*
-       * Não existem mais mensagens.
-       */
-
       if (snap.empty) {
         break;
       }
@@ -2242,11 +2245,11 @@ async function clearAllMessages() {
 
 
       /*
-       * Remove os anexos associados.
+       * Primeiro removemos os arquivos de mídia.
        *
-       * Se determinada mensagem não possuir anexo,
-       * deleteObject simplesmente falhará e será
-       * ignorado.
+       * O arquivo é identificado pelo ID da mensagem.
+       * Se não existir mídia para determinada mensagem,
+       * o erro é simplesmente ignorado.
        */
 
       await Promise.allSettled(
@@ -2263,7 +2266,10 @@ async function clearAllMessages() {
 
 
       /*
-       * Agora remove os documentos das mensagens.
+       * Depois removemos os documentos do Firestore.
+       *
+       * Fazemos deleteDoc individualmente para manter
+       * o comportamento compatível com as regras atuais.
        */
 
       for (const d of docs) {
@@ -2277,7 +2283,7 @@ async function clearAllMessages() {
 
 
       /*
-       * Mostra o progresso no próprio botão.
+       * Atualiza a mensagem de progresso.
        */
 
       if (button) {
@@ -2291,24 +2297,19 @@ async function clearAllMessages() {
 
     /*
      * Limpa imediatamente o estado local.
+     * O listener também atualizará a interface.
      */
 
     messages = [];
 
     replyTarget = null;
 
-
     $("replyBar")
       ?.classList
       .add("hidden");
 
+    await renderMessages();
 
-    renderMessages();
-
-
-    /*
-     * Resultado para o usuário.
-     */
 
     showToast(
       totalDeleted > 0
@@ -2342,7 +2343,6 @@ async function clearAllMessages() {
       button.textContent =
         "🗑️ Limpar todas as mensagens";
     }
-
   }
 }
 
@@ -2718,6 +2718,47 @@ async function sendMessage() {
   }
 
 
+  const sendBtn =
+    $("sendBtn");
+
+
+  /*
+   * Impede dois envios simultâneos.
+   * Isso é especialmente importante para
+   * anexos, pois a criptografia e o upload
+   * podem levar alguns segundos.
+   */
+
+  if (
+    sendBtn?.dataset.sending ===
+    "1"
+  ) {
+    return;
+  }
+
+
+  if (sendBtn) {
+
+    sendBtn.dataset.sending =
+      "1";
+
+    sendBtn.disabled =
+      true;
+
+    sendBtn.classList.add(
+      "sending"
+    );
+
+    sendBtn.textContent =
+      "⏳";
+
+    sendBtn.title =
+      selectedFile
+        ? "Enviando anexo cifrado…"
+        : "Enviando mensagem…";
+  }
+
+
   /*
    * Reforço de autenticação antes da gravação.
    *
@@ -2976,9 +3017,6 @@ async function sendMessage() {
     }
 
 
-    const sendBtn =
-      $("sendBtn");
-
     if (sendBtn) {
       sendBtn.textContent =
         "➤";
@@ -3028,10 +3066,43 @@ async function sendMessage() {
     }
 
 
+    const errorMessage =
+      e?.code === "storage/unauthorized"
+        ? "O Firebase recusou o envio do anexo."
+        : e?.code === "storage/quota-exceeded"
+          ? "O armazenamento do Firebase atingiu o limite."
+          : e?.code === "storage/canceled"
+            ? "O envio do anexo foi cancelado."
+            : e?.message ||
+              "Não foi possível enviar.";
+
     showToast(
-      e?.message ||
-      "Não foi possível enviar."
+      selectedFile
+        ? "Falha ao enviar anexo: " + errorMessage
+        : errorMessage
     );
+  } finally {
+
+    if (sendBtn) {
+
+      sendBtn.dataset.sending =
+        "0";
+
+      sendBtn.disabled =
+        !sessionReady;
+
+      sendBtn.classList.remove(
+        "sending"
+      );
+
+      sendBtn.textContent =
+        "➤";
+
+      sendBtn.title =
+        sessionReady
+          ? "Enviar mensagem"
+          : "Aguardando conexão segura…";
+    }
   }
 }
 
@@ -4625,6 +4696,7 @@ if ($("closeSettings")) {
         .add("hidden");
 }
 
+
 /* =========================================================
    LIMPAR TODAS AS MENSAGENS
 ========================================================= */
@@ -4635,7 +4707,7 @@ if ($("clearMessagesBtn")) {
     async () => {
 
       /*
-       * Fecha a janela de configurações.
+       * Fecha a janela antes de iniciar a operação.
        */
 
       $("settingsModal")
