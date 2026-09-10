@@ -4517,17 +4517,55 @@ if ($("attachBtn")) {
 if ($("fileInput")) {
 
   $("fileInput").onchange =
-    e => {
+    async e => {
 
       selectedFile =
         e.target.files?.[0] ||
         null;
 
 
-      if (selectedFile) {
+      if (!selectedFile) {
+        return;
+      }
+
+
+      /*
+       * Ao selecionar o arquivo, o envio começa
+       * automaticamente.
+       *
+       * Antes, este evento apenas mostrava:
+       *
+       * "arquivo pronto para envio cifrado"
+       *
+       * e aguardava um novo clique no botão Enviar.
+       *
+       * Agora o próprio onchange inicia
+       * a criptografia e o upload.
+       */
+
+      const file =
+        selectedFile;
+
+
+      showToast(
+        `${file.name} preparando anexo cifrado…`
+      );
+
+
+      try {
+
+        await sendMessage();
+
+      } catch (err) {
+
+        console.error(
+          "Falha ao iniciar envio do anexo:",
+          err
+        );
+
 
         showToast(
-          `${selectedFile.name} pronto para envio cifrado.`
+          "Não foi possível iniciar o envio do anexo."
         );
       }
     };
