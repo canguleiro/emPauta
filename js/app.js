@@ -1442,83 +1442,563 @@ async function renderMessages() {
     }
 
 
-    /*
-     * Mídia
-     */
+ /* =========================================================
+   MÍDIA / ANEXOS
+========================================================= */
 
-    if (d.media?.path) {
+if (d.media?.path) {
 
-      const mediaBox =
+  const mediaBox =
+    document.createElement(
+      "div"
+    );
+
+  mediaBox.className =
+    "media-loading";
+
+  mediaBox.textContent =
+    "Carregando anexo cifrado…";
+
+  bubble.appendChild(
+    mediaBox
+  );
+
+
+  decryptAttachment(
+    d.media,
+    d.senderUid === me.uid
+      ? await getOtherUid()
+      : d.senderUid
+  )
+    .then(blob => {
+
+      mediaBox.remove();
+
+
+      const url =
+        URL.createObjectURL(
+          blob
+        );
+
+
+      const type =
+        (
+          d.media.type ||
+          blob.type ||
+          ""
+        ).toLowerCase();
+
+
+      const name =
+        d.media.name ||
+        "Anexo";
+
+
+      /* =====================================================
+         IMAGENS
+      ===================================================== */
+
+      if (
+        type.startsWith("image/")
+      ) {
+
+        const img =
+          document.createElement(
+            "img"
+          );
+
+        img.className =
+          "media";
+
+        img.alt =
+          name;
+
+        img.src =
+          url;
+
+        img.title =
+          name;
+
+        img.onclick =
+          () =>
+            window.open(
+              url,
+              "_blank",
+              "noopener,noreferrer"
+            );
+
+        bubble.appendChild(
+          img
+        );
+
+        return;
+      }
+
+
+      /* =====================================================
+         ÁUDIO
+      ===================================================== */
+
+      if (
+        type.startsWith("audio/")
+      ) {
+
+        const audio =
+          document.createElement(
+            "audio"
+          );
+
+        audio.controls =
+          true;
+
+        audio.className =
+          "media-audio";
+
+        audio.src =
+          url;
+
+        bubble.appendChild(
+          audio
+        );
+
+        return;
+      }
+
+
+      /* =====================================================
+         VÍDEO
+      ===================================================== */
+
+      if (
+        type.startsWith("video/")
+      ) {
+
+        const video =
+          document.createElement(
+            "video"
+          );
+
+        video.controls =
+          true;
+
+        video.className =
+          "media-video";
+
+        video.src =
+          url;
+
+        bubble.appendChild(
+          video
+        );
+
+        return;
+      }
+
+
+      /* =====================================================
+         PDF
+      ===================================================== */
+
+      if (
+        type ===
+        "application/pdf"
+      ) {
+
+        const card =
+          document.createElement(
+            "div"
+          );
+
+        card.className =
+          "file-card";
+
+
+        const icon =
+          document.createElement(
+            "div"
+          );
+
+        icon.className =
+          "file-icon";
+
+        icon.textContent =
+          "📄";
+
+
+        const info =
+          document.createElement(
+            "div"
+          );
+
+        info.className =
+          "file-info";
+
+
+        const title =
+          document.createElement(
+            "div"
+          );
+
+        title.className =
+          "file-name";
+
+        title.textContent =
+          name;
+
+
+        const subtitle =
+          document.createElement(
+            "div"
+          );
+
+        subtitle.className =
+          "file-type";
+
+        subtitle.textContent =
+          "Documento PDF";
+
+
+        info.appendChild(
+          title
+        );
+
+        info.appendChild(
+          subtitle
+        );
+
+
+        const open =
+          document.createElement(
+            "button"
+          );
+
+        open.className =
+          "file-open";
+
+        open.textContent =
+          "Abrir";
+
+        open.onclick =
+          () =>
+            window.open(
+              url,
+              "_blank",
+              "noopener,noreferrer"
+            );
+
+
+        card.appendChild(
+          icon
+        );
+
+        card.appendChild(
+          info
+        );
+
+        card.appendChild(
+          open
+        );
+
+
+        bubble.appendChild(
+          card
+        );
+
+        return;
+      }
+
+
+      /* =====================================================
+         OUTROS DOCUMENTOS
+      ===================================================== */
+
+      const card =
         document.createElement(
           "div"
         );
 
-      mediaBox.className =
-        "media-loading";
+      card.className =
+        "file-card";
 
-      mediaBox.textContent =
-        "Carregando mídia cifrada…";
 
-      bubble.appendChild(
-        mediaBox
+      const icon =
+        document.createElement(
+          "div"
+        );
+
+      icon.className =
+        "file-icon";
+
+      icon.textContent =
+        getFileIcon(
+          name,
+          type
+        );
+
+
+      const info =
+        document.createElement(
+          "div"
+        );
+
+      info.className =
+        "file-info";
+
+
+      const title =
+        document.createElement(
+          "div"
+        );
+
+      title.className =
+        "file-name";
+
+      title.textContent =
+        name;
+
+
+      const subtitle =
+        document.createElement(
+          "div"
+        );
+
+      subtitle.className =
+        "file-type";
+
+      subtitle.textContent =
+        getFileTypeLabel(
+          name,
+          type
+        );
+
+
+      info.appendChild(
+        title
+      );
+
+      info.appendChild(
+        subtitle
       );
 
 
-      decryptAttachment(
-        d.media,
-        d.senderUid === me.uid
-          ? await getOtherUid()
-          : d.senderUid
-      )
-        .then(blob => {
+      const download =
+        document.createElement(
+          "a"
+        );
 
-          mediaBox.remove();
+      download.className =
+        "file-download";
 
-          const url =
-            URL.createObjectURL(
-              blob
-            );
+      download.textContent =
+        "Baixar";
 
-          let el;
+      download.href =
+        url;
 
-          if (
-            d.media.type?.startsWith(
-              "audio/"
-            )
-          ) {
+      download.download =
+        name;
 
-            el =
-              document.createElement(
-                "audio"
-              );
+      download.target =
+        "_blank";
 
-            el.controls = true;
+      download.rel =
+        "noopener";
 
-            el.src = url;
 
-          } else {
+      card.appendChild(
+        icon
+      );
 
-            el =
-              document.createElement(
-                "img"
-              );
+      card.appendChild(
+        info
+      );
 
-            el.className =
-              "media";
+      card.appendChild(
+        download
+      );
 
-            el.alt =
-              "Imagem";
 
-            el.src = url;
+      bubble.appendChild(
+        card
+      );
 
-            el.onclick =
-              () =>
-                window.open(
-                  url,
-                  "_blank",
-                  "noopener,noreferrer"
-                );
-          }
+    })
+    .catch(error => {
+
+      console.warn(
+        "Falha ao descriptografar anexo:",
+        error
+      );
+
+      mediaBox.textContent =
+        "Não foi possível abrir este anexo.";
+    });
+}
+
+
+    /* =========================================================
+   ÍCONE DO ARQUIVO
+========================================================= */
+
+function getFileIcon(
+  name,
+  type
+) {
+
+  const n =
+    (
+      name ||
+      ""
+    ).toLowerCase();
+
+
+  if (
+    type.includes("word") ||
+    n.endsWith(".doc") ||
+    n.endsWith(".docx")
+  ) {
+    return "📝";
+  }
+
+
+  if (
+    type.includes("excel") ||
+    type.includes("spreadsheet") ||
+    n.endsWith(".xls") ||
+    n.endsWith(".xlsx") ||
+    n.endsWith(".csv")
+  ) {
+    return "📊";
+  }
+
+
+  if (
+    type.includes("powerpoint") ||
+    type.includes("presentation") ||
+    n.endsWith(".ppt") ||
+    n.endsWith(".pptx")
+  ) {
+    return "📽️";
+  }
+
+
+  if (
+    type.includes("zip") ||
+    type.includes("rar") ||
+    type.includes("compressed") ||
+    n.endsWith(".zip") ||
+    n.endsWith(".rar") ||
+    n.endsWith(".7z")
+  ) {
+    return "🗜️";
+  }
+
+
+  if (
+    type.startsWith("text/") ||
+    n.endsWith(".txt")
+  ) {
+    return "📃";
+  }
+
+
+  if (
+    type ===
+    "application/pdf" ||
+    n.endsWith(".pdf")
+  ) {
+    return "📄";
+  }
+
+
+  return "📎";
+}
+
+
+/* =========================================================
+   TIPO DO ARQUIVO
+========================================================= */
+
+function getFileTypeLabel(
+  name,
+  type
+) {
+
+  const n =
+    (
+      name ||
+      ""
+    ).toLowerCase();
+
+
+  if (
+    type ===
+    "application/pdf" ||
+    n.endsWith(".pdf")
+  ) {
+    return "Documento PDF";
+  }
+
+
+  if (
+    type.includes("word") ||
+    n.endsWith(".doc") ||
+    n.endsWith(".docx")
+  ) {
+    return "Documento Word";
+  }
+
+
+  if (
+    type.includes("excel") ||
+    type.includes("spreadsheet") ||
+    n.endsWith(".xls") ||
+    n.endsWith(".xlsx")
+  ) {
+    return "Planilha";
+  }
+
+
+  if (
+    type.includes("powerpoint") ||
+    type.includes("presentation") ||
+    n.endsWith(".ppt") ||
+    n.endsWith(".pptx")
+  ) {
+    return "Apresentação";
+  }
+
+
+  if (
+    n.endsWith(".csv")
+  ) {
+    return "Arquivo CSV";
+  }
+
+
+  if (
+    n.endsWith(".txt")
+  ) {
+    return "Arquivo de texto";
+  }
+
+
+  if (
+    type.startsWith("video/")
+  ) {
+    return "Vídeo";
+  }
+
+
+  if (
+    type.startsWith("audio/")
+  ) {
+    return "Áudio";
+  }
+
+
+  return "Arquivo";
+}
 
 
           /*
@@ -2359,45 +2839,36 @@ async function encryptAttachment(
   const max =
     8 * 1024 * 1024;
 
-
-  if (
-    file.size > max
-  ) {
+  if (file.size > max) {
 
     throw new Error(
       "Para manter o app simples, anexos ficam limitados a 8 MB."
     );
   }
 
-
   const plain =
     await file.arrayBuffer();
-
 
   const secret =
     await getSharedSecret(
       otherUid
     );
 
-
   const salt =
     crypto.getRandomValues(
       new Uint8Array(16)
     );
-
 
   const iv =
     crypto.getRandomValues(
       new Uint8Array(12)
     );
 
-
   const key =
     await deriveMessageKey(
       secret,
       salt
     );
-
 
   const cipher =
     await crypto.subtle.encrypt(
@@ -2408,7 +2879,6 @@ async function encryptAttachment(
       key,
       plain
     );
-
 
   return {
 
@@ -2422,11 +2892,61 @@ async function encryptAttachment(
       b64(iv),
 
     type:
-      file.type,
+      file.type ||
+      "application/octet-stream",
 
     name:
-      file.name
+      file.name,
+
+    size:
+      file.size
   };
+}
+
+
+async function decryptAttachment(
+  media,
+  otherUid
+) {
+
+  const cipher =
+    await getBytes(
+      ref(
+        storage,
+        media.path
+      )
+    );
+
+  const secret =
+    await getSharedSecret(
+      otherUid
+    );
+
+  const key =
+    await deriveMessageKey(
+      secret,
+      unb64(media.salt)
+    );
+
+  const plain =
+    await crypto.subtle.decrypt(
+      {
+        name: "AES-GCM",
+        iv:
+          unb64(media.iv)
+      },
+      key,
+      cipher
+    );
+
+  return new Blob(
+    [plain],
+    {
+      type:
+        media.type ||
+        "application/octet-stream"
+    }
+  );
 }
 
 
