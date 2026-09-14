@@ -1208,1777 +1208,6 @@ function unlockApp() {
     ?.classList
     .add("hidden");
 
-  updateActivity();
-
-  markSeen()
-    .catch(
-      () => {}
-    );
-}
-
-
-/* =========================================================
-   PANIC / DISFARCE
-========================================================= */
-
-function enterPanic() {
-
-  document.body
-    .classList
-    .add("panic");
-
-  setTimeout(() => {
-
-    document.body
-      .classList
-      .remove("panic");
-
-  }, 800);
-}
-
-
-/* =========================================================
-   FORMATAÇÃO
-========================================================= */
-
-function formatTime(ms) {
-
-  if (!ms) return "";
-
-  const d =
-    new Date(ms);
-
-  return d.toLocaleTimeString(
-    "pt-BR",
-    {
-      hour: "2-digit",
-      minute: "2-digit"
-    }
-  );
-}
-
-
-function formatDate(ms) {
-
-  if (!ms) return "";
-
-  const d =
-    new Date(ms);
-
-  return d.toLocaleDateString(
-    "pt-BR"
-  );
-}
-
-
-/* =========================================================
-   STATUS VISUAL
-========================================================= */
-
-function updateConnectionState(
-  text
-) {
-
-  const status =
-    $("connectionStatus");
-
-  if (!status) return;
-
-  status.textContent =
-    text;
-
-  status.classList.toggle(
-    "offline",
-    text === "offline"
-  );
-
-  status.classList.toggle(
-    "reconnecting",
-    text === "reconectando…"
-  );
-}
-
-
-/* =========================================================
-   CHAVES — LISTENER
-========================================================= */
-
-function listenKeys() {
-
-  if (
-    unsubscribeKeys
-  ) {
-    unsubscribeKeys();
-    unsubscribeKeys = null;
-  }
-
-  if (!me) return;
-
-  keysReady = false;
-
-  unsubscribeKeys =
-    onSnapshot(
-      KEYS,
-      snapshot => {
-
-        keyCache.clear();
-
-        snapshot.forEach(
-          item => {
-
-            keyCache.set(
-              item.id,
-              item.data()
-            );
-          }
-        );
-
-        sharedSecretCache.clear();
-
-        keysReady =
-          true;
-
-        updateConnectionState(
-          "online"
-        );
-
-        maybeSessionReady();
-
-      },
-      error => {
-
-        console.error(
-          "Erro no listener de chaves:",
-          error
-        );
-
-        keysReady =
-          false;
-
-        connectionState =
-          "reconnecting";
-
-        updateConnectionState(
-          "reconectando…"
-        );
-      }
-    );
-}
-
-
-/* =========================================================
-   MENSAGENS — DESCRIPTOGRAFIA
-========================================================= */
-
-async function decryptMessage(
-  docSnap
-) {
-
-  const data =
-    docSnap.data();
-
-  const senderUid =
-    data.senderUid;
-
-  if (!senderUid) {
-    throw new Error(
-      "Mensagem sem remetente."
-    );
-  }
-
-  const otherUid =
-    senderUid === me.uid
-      ? await getOtherUid()
-      : senderUid;
-
-  if (!otherUid) {
-    throw new Error(
-      "Não foi possível identificar a outra pessoa."
-    );
-  }
-
-  const plain =
-    await decryptObject(
-      data,
-      otherUid,
-      docSnap.id
-    );
-
-  return {
-    id:
-      docSnap.id,
-
-    data:
-      plain,
-
-    senderUid,
-
-    createdAtMs:
-      data.createdAtMs ||
-      plain.createdAtMs ||
-      0
-  };
-}
-
-
-/* =========================================================
-   MENSAGENS — LISTENER
-========================================================= */
-
-function listenMessages() {
-
-  if (
-    unsubscribeMessages
-  ) {
-    unsubscribeMessages();
-    unsubscribeMessages = null;
-  }
-
-  if (!me) return;
-
-  messagesReady = false;
-
-  const q =
-    query(
-      MSGS,
-      orderBy(
-        "createdAtMs",
-        "asc"
-      ),
-      limit(500)
-    );
-
-  unsubscribeMessages =
-    onSnapshot(
-      q,
-      async snapshot => {
-
-        try {
-
-          const out = [];
-
-          for (
-            const item of snapshot.docs
-          ) {
-
-            try {
-
-              const decrypted =
-                await decryptMessage(
-                  item
-                );
-
-              out.push(
-                decrypted
-              );
-
-            } catch (e) {
-
-              console.warn(
-                "Não foi possível descriptografar mensagem:",
-                item.id,
-                e
-              );
-            }
-          }
-
-          messages =
-            out.sort(
-              (a, b) =>
-                a.createdAtMs -
-                b.createdAtMs
-            );
-
-          messagesReady =
-            true;
-
-          messageListenerRetryCount =
-            0;
-
-          renderMessages();
-
-          maybeSessionReady();
-
-          markSeen()
-            .catch(
-              () => {}
-            );
-
-        } catch (e) {
-
-          console.error(
-            "Erro processando mensagens:",
-            e
-          );
-        }
-
-      },
-      error => {
-
-        console.error(
-          "Erro no listener de mensagens:",
-          error
-        );
-
-        messagesReady =
-          false;
-
-        connectionState =
-          "reconnecting";
-
-        updateConnectionState(
-          "reconectando…"
-        );
-
-        retryMessageListener();
-      }
-    );
-}
-
-
-function retryMessageListener() {
-
-  if (
-    messageListenerRetry
-  ) {
-    return;
-  }
-
-  const delay =
-    Math.min(
-      1000 *
-        Math.pow(
-          2,
-          messageListenerRetryCount
-        ),
-      30000
-    );
-
-  messageListenerRetryCount++;
-
-  messageListenerRetry =
-    setTimeout(
-      () => {
-
-        messageListenerRetry =
-          null;
-
-        if (
-          me &&
-          navigator.onLine
-        ) {
-          listenMessages();
-        }
-
-      },
-      delay
-    );
-}
-
-
-/* =========================================================
-   STATUS — LISTENER
-========================================================= */
-
-function listenStatus() {
-
-  if (
-    unsubscribeStatus
-  ) {
-    unsubscribeStatus();
-    unsubscribeStatus = null;
-  }
-
-  if (!me) return;
-
-  statusReady = false;
-
-  unsubscribeStatus =
-    onSnapshot(
-      STATUS,
-      snapshot => {
-
-        const list = [];
-
-        snapshot.forEach(
-          item => {
-
-            list.push(
-              item.data()
-            );
-          }
-        );
-
-        members =
-          list;
-
-        statusReady =
-          true;
-
-        renderOnlineStatus();
-
-        maybeSessionReady();
-
-      },
-      error => {
-
-        console.error(
-          "Erro no listener de status:",
-          error
-        );
-
-        statusReady =
-          false;
-      }
-    );
-}
-
-
-/* =========================================================
-   SESSÃO
-========================================================= */
-
-function maybeSessionReady() {
-
-  if (
-    keysReady &&
-    messagesReady &&
-    statusReady
-  ) {
-
-    sessionReady =
-      true;
-
-    connectionState =
-      "online";
-
-    updateConnectionState(
-      "online"
-    );
-
-    if (
-      sessionInitResolve
-    ) {
-
-      sessionInitResolve();
-
-      sessionInitResolve =
-        null;
-    }
-
-    updateSendState();
-  }
-}
-
-
-function waitForSession() {
-
-  if (sessionReady) {
-    return Promise.resolve();
-  }
-
-  if (
-    !sessionInitPromise
-  ) {
-
-    sessionInitPromise =
-      new Promise(
-        resolve => {
-
-          sessionInitResolve =
-            resolve;
-        }
-      );
-  }
-
-  return sessionInitPromise;
-}
-
-
-/* =========================================================
-   STATUS VISUAL / ONLINE
-========================================================= */
-
-function renderOnlineStatus() {
-
-  const subtitle =
-    $("chatSubtitle");
-
-  if (!subtitle) return;
-
-  const others =
-    (members || [])
-      .filter(
-        x =>
-          x.uid !== me?.uid
-      );
-
-  const active =
-    others.some(
-      x => {
-
-        if (!x.lastActive) {
-          return false;
-        }
-
-        let t = 0;
-
-        if (
-          typeof x.lastActive.toMillis ===
-          "function"
-        ) {
-          t =
-            x.lastActive.toMillis();
-        } else if (
-          x.lastActive.seconds
-        ) {
-          t =
-            x.lastActive.seconds *
-            1000;
-        }
-
-        return (
-          Date.now() -
-            t <
-          90000
-        );
-      }
-    );
-
-  subtitle.textContent =
-    active
-      ? "online"
-      : "offline";
-}
-
-
-/* =========================================================
-   RENDER MENSAGENS
-========================================================= */
-
-async function renderMessages() {
-
-  const container =
-    $("messages");
-
-  if (!container) return;
-
-  container.innerHTML = "";
-
-  let lastDate = "";
-
-  for (
-    const m of messages
-  ) {
-
-    const d =
-      m.data || {};
-
-    if (
-      searchText &&
-      !(
-        d.text ||
-        ""
-      )
-        .toLowerCase()
-        .includes(
-          searchText.toLowerCase()
-        )
-    ) {
-      continue;
-    }
-
-    const date =
-      formatDate(
-        m.createdAtMs
-      );
-
-    if (
-      date &&
-      date !== lastDate
-    ) {
-
-      const separator =
-        document.createElement(
-          "div"
-        );
-
-      separator.className =
-        "date-separator";
-
-      separator.textContent =
-        date;
-
-      container.appendChild(
-        separator
-      );
-
-      lastDate =
-        date;
-    }
-
-    const row =
-      document.createElement(
-        "div"
-      );
-
-    row.className =
-      "msg-row " +
-      (
-        d.senderUid === me.uid
-          ? "mine"
-          : "other"
-      );
-
-
-    const bubble =
-      document.createElement(
-        "div"
-      );
-
-    bubble.className =
-      "bubble";
-
-    bubble.dataset.id =
-      m.id;
-
-
-    /*
-     * Nome do remetente
-     */
-
-    if (
-      d.senderUid !== me.uid
-    ) {
-
-      const s =
-        document.createElement(
-          "div"
-        );
-
-      s.className =
-        "sender";
-
-      s.textContent =
-        d.senderNick ||
-        "Outro";
-
-      bubble.appendChild(s);
-    }
-
-
-    /*
-     * Resposta
-     */
-
-    if (d.reply?.text) {
-
-      const r =
-        document.createElement(
-          "div"
-        );
-
-      r.className =
-        "reply";
-
-      r.textContent =
-        `${d.reply.sender}: ${d.reply.text}`;
-
-      bubble.appendChild(r);
-    }
-
-
-    /*
-     * Mídia
-     */
-
-    if (d.media?.path) {
-
-      const mediaBox =
-        document.createElement(
-          "div"
-        );
-
-      mediaBox.className =
-        "media-loading";
-
-      mediaBox.textContent =
-        "Carregando mídia cifrada…";
-
-      bubble.appendChild(
-        mediaBox
-      );
-
-
-      decryptAttachment(
-        d.media,
-        d.senderUid === me.uid
-          ? await getOtherUid()
-          : d.senderUid
-      )
-        .then(blob => {
-
-          mediaBox.remove();
-
-          const url =
-            URL.createObjectURL(
-              blob
-            );
-
-          let el;
-
-          const mediaType =
-            d.media.type ||
-            "application/octet-stream";
-
-          if (
-            mediaType.startsWith("image/")
-          ) {
-
-            el =
-              document.createElement(
-                "img"
-              );
-
-            el.className =
-              "media";
-
-            el.alt =
-              d.media.name ||
-              "Imagem";
-
-            el.src = url;
-
-            el.onclick =
-              () =>
-                window.open(
-                  url,
-                  "_blank",
-                  "noopener,noreferrer"
-                );
-
-          } else if (
-            mediaType.startsWith("audio/")
-          ) {
-
-            el =
-              document.createElement(
-                "audio"
-              );
-
-            el.controls = true;
-            el.src = url;
-
-          } else if (
-            mediaType.startsWith("video/")
-          ) {
-
-            el =
-              document.createElement(
-                "video"
-              );
-
-            el.controls = true;
-            el.className = "media";
-            el.src = url;
-
-          } else {
-
-            /*
-             * DOCUMENTOS E OUTROS TIPOS DE ARQUIVO
-             *
-             * Documentos não devem ser tratados como imagem.
-             * Criamos um cartão simples com o nome do arquivo
-             * e um botão para abrir/baixar o conteúdo descriptografado.
-             */
-
-            el =
-              document.createElement(
-                "div"
-              );
-
-            el.className =
-              "document-attachment";
-
-            const icon =
-              document.createElement(
-                "span"
-              );
-
-            icon.className =
-              "document-icon";
-
-            icon.textContent = "📄";
-
-            const info =
-              document.createElement(
-                "div"
-              );
-
-            info.className =
-              "document-info";
-
-            const name =
-              document.createElement(
-                "div"
-              );
-
-            name.className =
-              "document-name";
-
-            name.textContent =
-              d.media.name ||
-              "Documento";
-
-            const type =
-              document.createElement(
-                "div"
-              );
-
-            type.className =
-              "document-type";
-
-            type.textContent =
-              mediaType;
-
-            info.appendChild(name);
-            info.appendChild(type);
-
-            const download =
-              document.createElement(
-                "a"
-              );
-
-            download.className =
-              "document-download";
-
-            download.href = url;
-
-            download.download =
-              d.media.name ||
-              "arquivo";
-
-            download.target = "_blank";
-
-            download.rel =
-              "noopener noreferrer";
-
-            download.textContent =
-              "Baixar";
-
-            el.appendChild(icon);
-            el.appendChild(info);
-            el.appendChild(download);
-          }
-
-
-          /*
-           * Inserimos a mídia antes do
-           * conteúdo textual.
-           */
-
-          const textElement =
-            bubble.querySelector(
-              ".text"
-            );
-
-          if (textElement) {
-
-            bubble.insertBefore(
-              el,
-              textElement
-            );
-
-          } else {
-
-            bubble.appendChild(
-              el
-            );
-          }
-
-        })
-        .catch(error => {
-
-          console.warn(
-            "Falha ao descriptografar mídia:",
-            error
-          );
-
-          mediaBox.textContent =
-            "Mídia indisponível neste dispositivo.";
-        });
-    }
-
-
-    /*
-     * Texto
-     */
-
-    const t =
-      document.createElement(
-        "div"
-      );
-
-    t.className =
-      "text";
-
-    t.textContent =
-      d.text || "";
-
-    bubble.appendChild(t);
-
-
-    /*
-     * Reações
-     */
-
-    if (d.reactions) {
-
-      const reactions =
-        document.createElement(
-          "div"
-        );
-
-      reactions.className =
-        "reactions";
-
-      Object.entries(
-        d.reactions
-      ).forEach(
-        ([emoji, users]) => {
-
-          if (
-            !Array.isArray(users) ||
-            users.length === 0
-          ) {
-            return;
-          }
-
-          const r =
-            document.createElement(
-              "button"
-            );
-
-          r.type = "button";
-
-          r.className =
-            "reaction";
-
-          r.textContent =
-            `${emoji} ${users.length}`;
-
-          r.onclick =
-            e => {
-
-              e.stopPropagation();
-
-              toggleReaction(
-                m.id,
-                emoji
-              );
-            };
-
-          reactions.appendChild(r);
-        }
-      );
-
-      bubble.appendChild(
-        reactions
-      );
-    }
-
-
-    /*
-     * Rodapé
-     */
-
-    const footer =
-      document.createElement(
-        "div"
-      );
-
-    footer.className =
-      "message-footer";
-
-    const time =
-      document.createElement(
-        "span"
-      );
-
-    time.className =
-      "time";
-
-    time.textContent =
-      formatTime(
-        m.createdAtMs
-      );
-
-    footer.appendChild(
-      time
-    );
-
-
-    if (
-      d.senderUid === me.uid
-    ) {
-
-      const seen =
-        document.createElement(
-          "span"
-        );
-
-      seen.className =
-        "seen";
-
-      seen.textContent =
-        d.seen
-          ? "✓✓"
-          : "✓";
-
-      footer.appendChild(
-        seen
-      );
-    }
-
-
-    bubble.appendChild(
-      footer
-    );
-
-
-    /*
-     * Menu da mensagem
-     */
-
-    const menuButton =
-      document.createElement(
-        "button"
-      );
-
-    menuButton.type =
-      "button";
-
-    menuButton.className =
-      "message-menu-button";
-
-    menuButton.textContent =
-      "⋮";
-
-    menuButton.title =
-      "Opções";
-
-    menuButton.onclick =
-      e => {
-
-        e.stopPropagation();
-
-        openMessageMenu(
-          m,
-          menuButton
-        );
-      };
-
-    bubble.appendChild(
-      menuButton
-    );
-
-
-    row.appendChild(
-      bubble
-    );
-
-    container.appendChild(
-      row
-    );
-  }
-
-  container.scrollTop =
-    container.scrollHeight;
-}
-
-
-/* =========================================================
-   MENU DA MENSAGEM
-========================================================= */
-
-function openMessageMenu(
-  message,
-  button
-) {
-
-  document
-    .querySelectorAll(
-      ".menu"
-    )
-    .forEach(
-      x => x.remove()
-    );
-
-  const menu =
-    document.createElement(
-      "div"
-    );
-
-  menu.className =
-    "menu message-menu";
-
-  const reply =
-    document.createElement(
-      "button"
-    );
-
-  reply.type =
-    "button";
-
-  reply.textContent =
-    "↩️ Responder";
-
-  reply.onclick =
-    () => {
-
-      replyTarget = {
-        sender:
-          message.data.senderNick ||
-          "Outro",
-
-        text:
-          message.data.text ||
-          ""
-      };
-
-      updateReplyBar();
-
-      menu.remove();
-    };
-
-  menu.appendChild(
-    reply
-  );
-
-
-  const react =
-    document.createElement(
-      "button"
-    );
-
-  react.type =
-    "button";
-
-  react.textContent =
-    "😊 Reagir";
-
-  react.onclick =
-    () => {
-
-      toggleReaction(
-        message.id,
-        "❤️"
-      );
-
-      menu.remove();
-    };
-
-  menu.appendChild(
-    react
-  );
-
-
-  const copy =
-    document.createElement(
-      "button"
-    );
-
-  copy.type =
-    "button";
-
-  copy.textContent =
-    "📋 Copiar";
-
-  copy.onclick =
-    async () => {
-
-      try {
-
-        await navigator.clipboard.writeText(
-          message.data.text ||
-          ""
-        );
-
-        showToast(
-          "Mensagem copiada."
-        );
-
-      } catch {
-
-        showToast(
-          "Não foi possível copiar."
-        );
-      }
-
-      menu.remove();
-    };
-
-  menu.appendChild(
-    copy
-  );
-
-
-  if (
-    message.data.senderUid ===
-    me.uid
-  ) {
-
-    const del =
-      document.createElement(
-        "button"
-      );
-
-    del.type =
-      "button";
-
-    del.textContent =
-      "🗑️ Apagar";
-
-    del.onclick =
-      async () => {
-
-        menu.remove();
-
-        await deleteMessage(
-          message
-        );
-      };
-
-    menu.appendChild(
-      del
-    );
-  }
-
-
-  document.body.appendChild(
-    menu
-  );
-
-
-  const rect =
-    button.getBoundingClientRect();
-
-  menu.style.position =
-    "fixed";
-
-  menu.style.top =
-    `${Math.min(
-      rect.bottom + 4,
-      window.innerHeight -
-        220
-    )}px`;
-
-  menu.style.left =
-    `${Math.min(
-      rect.left,
-      window.innerWidth -
-        180
-    )}px`;
-}
-
-
-/* =========================================================
-   BARRA DE RESPOSTA
-========================================================= */
-
-function updateReplyBar() {
-
-  const bar =
-    $("replyBar");
-
-  if (!bar) return;
-
-  if (!replyTarget) {
-
-    bar.classList.add(
-      "hidden"
-    );
-
-    return;
-  }
-
-  bar.classList.remove(
-    "hidden"
-  );
-
-  const sender =
-    bar.querySelector(
-      ".reply-sender"
-    );
-
-  const text =
-    bar.querySelector(
-      ".reply-text"
-    );
-
-  if (sender) {
-
-    sender.textContent =
-      replyTarget.sender;
-  }
-
-  if (text) {
-
-    text.textContent =
-      replyTarget.text;
-  }
-}
-
-
-if ($("replyClose")) {
-
-  $("replyClose").onclick =
-    () => {
-
-      replyTarget = null;
-
-      updateReplyBar();
-    };
-}
-
-
-/* =========================================================
-   REAÇÕES
-========================================================= */
-
-async function toggleReaction(
-  messageId,
-  emoji
-) {
-
-  const message =
-    messages.find(
-      x =>
-        x.id === messageId
-    );
-
-  if (!message) return;
-
-  const data =
-    message.data;
-
-  const reactions =
-    {
-      ...(data.reactions || {})
-    };
-
-  const users =
-    Array.isArray(
-      reactions[emoji]
-    )
-      ? [
-          ...reactions[emoji]
-        ]
-      : [];
-
-  const index =
-    users.indexOf(
-      me.uid
-    );
-
-  if (
-    index >= 0
-  ) {
-
-    users.splice(
-      index,
-      1
-    );
-
-  } else {
-
-    users.push(
-      me.uid
-    );
-  }
-
-  reactions[emoji] =
-    users;
-
-  const other =
-    data.senderUid === me.uid
-      ? await getOtherUid()
-      : data.senderUid;
-
-  if (!other) return;
-
-  const body = {
-    ...data,
-    reactions
-  };
-
-  const encrypted =
-    await encryptObject(
-      body,
-      other,
-      messageId
-    );
-
-  await updateDoc(
-    doc(
-      MSGS,
-      messageId
-    ),
-    {
-      ...encrypted,
-      senderUid:
-        data.senderUid,
-      createdAtMs:
-        message.createdAtMs
-    }
-  );
-}
-
-
-/* =========================================================
-   MARCAR COMO VISTAS
-========================================================= */
-
-async function markSeen() {
-
-  if (!me) return;
-
-  /*
-   * Mantemos a operação conservadora:
-   * somente mensagens recebidas são
-   * atualizadas localmente no Firestore.
-   */
-
-  for (
-    const message of messages
-  ) {
-
-    if (
-      message.data.senderUid ===
-      me.uid
-    ) {
-      continue;
-    }
-
-    if (
-      message.data.seen ===
-      true
-    ) {
-      continue;
-    }
-
-    try {
-
-      const other =
-        message.data.senderUid;
-
-      const body = {
-        ...message.data,
-        seen: true
-      };
-
-      const encrypted =
-        await encryptObject(
-          body,
-          other,
-          message.id
-        );
-
-      await updateDoc(
-        doc(
-          MSGS,
-          message.id
-        ),
-        {
-          ...encrypted,
-          senderUid:
-            message.senderUid,
-          createdAtMs:
-            message.createdAtMs
-        }
-      );
-
-    } catch (e) {
-
-      console.warn(
-        "Não foi possível marcar mensagem como vista:",
-        e
-      );
-    }
-  }
-}
-
-
-/* =========================================================
-   EXCLUSÃO DE MENSAGEM
-========================================================= */
-
-async function deleteMessage(
-  message
-) {
-
-  if (!message) return;
-
-  if (
-    message.data.senderUid !==
-    me.uid
-  ) {
-
-    showToast(
-      "Você só pode apagar suas próprias mensagens."
-    );
-
-    return;
-  }
-
-  try {
-
-    await deleteDoc(
-      doc(
-        MSGS,
-        message.id
-      )
-    );
-
-    if (
-      message.data.media?.path
-    ) {
-
-      await deleteObject(
-        ref(
-          storage,
-          message.data.media.path
-        )
-      ).catch(
-        () => {}
-      );
-    }
-
-    showToast(
-      "Mensagem apagada."
-    );
-
-  } catch (e) {
-
-    console.error(
-      e
-    );
-
-    showToast(
-      "Não foi possível apagar a mensagem."
-    );
-  }
-}
-
-          rpId:
-            location.hostname,
-
-          allowCredentials: [
-            {
-              type: "public-key",
-              id:
-                fromBase64url(id)
-            }
-          ],
-
-          userVerification:
-            "required",
-
-          timeout: 60000
-        }
-      });
-
-    if (credential) {
-      unlockApp();
-    }
-
-  } catch (e) {
-
-    console.warn(e);
-
-    showToast(
-      "Biometria não autorizada."
-    );
-  }
-}
-
-
-/* =========================================================
-   PIN PAD
-========================================================= */
-
-function setupPinpad() {
-
-  const pad =
-    $("pinpad");
-
-  if (!pad) return;
-
-  const keys = [
-    "1","2","3",
-    "4","5","6",
-    "7","8","9",
-    "⌫","0","↵"
-  ];
-
-  pad.innerHTML = "";
-
-  keys.forEach(k => {
-
-    const b =
-      document.createElement(
-        "button"
-      );
-
-    b.textContent = k;
-
-    b.onclick =
-      () => handlePinKey(k);
-
-    pad.appendChild(b);
-  });
-
-  renderDots();
-}
-
-
-function renderDots() {
-
-  const dots =
-    $("pinDots");
-
-  if (!dots) return;
-
-  dots.innerHTML = "";
-
-  for (
-    let i = 0;
-    i < 6;
-    i++
-  ) {
-
-    const d =
-      document.createElement(
-        "span"
-      );
-
-    d.className =
-      "dot" +
-      (
-        pinBuffer.length > i
-          ? " on"
-          : ""
-      );
-
-    dots.appendChild(d);
-  }
-}
-
-
-async function handlePinKey(k) {
-
-  if (k === "⌫") {
-
-    pinBuffer =
-      pinBuffer.slice(0, -1);
-
-    renderDots();
-
-    return;
-  }
-
-  if (k === "↵") {
-
-    if (
-      pinBuffer.length === 6
-    ) {
-
-      if (pinReady) {
-
-        if (
-          await checkPin(
-            pinBuffer
-          )
-        ) {
-
-          unlockApp();
-
-        } else {
-
-          pinBuffer = "";
-
-          renderDots();
-
-          showToast(
-            "PIN incorreto."
-          );
-        }
-
-      } else {
-
-        await setNewPin(
-          pinBuffer
-        );
-
-        unlockApp();
-
-        showToast(
-          "PIN deste dispositivo configurado."
-        );
-      }
-    }
-
-    return;
-  }
-
-  if (
-    /^\d$/.test(k) &&
-    pinBuffer.length < 6
-  ) {
-
-    pinBuffer += k;
-
-    renderDots();
-
-    if (
-      pinBuffer.length === 6
-    ) {
-
-      setTimeout(
-        () => handlePinKey("↵"),
-        100
-      );
-    }
-  }
-}
-
-
-function lockApp() {
-
-  if (!pinReady) return;
-
-  locked = true;
-
-  pinBuffer = "";
-
-  $("lockScreen")
-    ?.classList
-    .remove("hidden");
-
-  renderDots();
-}
-
-
-function unlockApp() {
-
-  locked = false;
-
-  pinBuffer = "";
-
-  $("lockScreen")
-    ?.classList
-    .add("hidden");
-
   lastActivity =
     Date.now();
 }
@@ -3067,7 +1296,6 @@ if ($("panicUnlock")) {
       }
     };
 }
-
 
 /* =========================================================
    RENDERIZAÇÃO DAS MENSAGENS
@@ -3253,13 +1481,22 @@ async function renderMessages() {
 
           let el;
 
-          const mediaType =
-            d.media.type ||
-            "application/octet-stream";
-
           if (
-            mediaType.startsWith("image/")
+            d.media.type?.startsWith(
+              "audio/"
+            )
           ) {
+
+            el =
+              document.createElement(
+                "audio"
+              );
+
+            el.controls = true;
+
+            el.src = url;
+
+          } else {
 
             el =
               document.createElement(
@@ -3270,7 +1507,6 @@ async function renderMessages() {
               "media";
 
             el.alt =
-              d.media.name ||
               "Imagem";
 
             el.src = url;
@@ -3282,119 +1518,6 @@ async function renderMessages() {
                   "_blank",
                   "noopener,noreferrer"
                 );
-
-          } else if (
-            mediaType.startsWith("audio/")
-          ) {
-
-            el =
-              document.createElement(
-                "audio"
-              );
-
-            el.controls = true;
-            el.src = url;
-
-          } else if (
-            mediaType.startsWith("video/")
-          ) {
-
-            el =
-              document.createElement(
-                "video"
-              );
-
-            el.controls = true;
-            el.className = "media";
-            el.src = url;
-
-          } else {
-
-            /*
-             * DOCUMENTOS E OUTROS TIPOS DE ARQUIVO
-             *
-             * Documentos não devem ser tratados como imagem.
-             * Criamos um cartão simples com o nome do arquivo
-             * e um botão para abrir/baixar o conteúdo descriptografado.
-             */
-
-            el =
-              document.createElement(
-                "div"
-              );
-
-            el.className =
-              "document-attachment";
-
-            const icon =
-              document.createElement(
-                "span"
-              );
-
-            icon.className =
-              "document-icon";
-
-            icon.textContent = "📄";
-
-            const info =
-              document.createElement(
-                "div"
-              );
-
-            info.className =
-              "document-info";
-
-            const name =
-              document.createElement(
-                "div"
-              );
-
-            name.className =
-              "document-name";
-
-            name.textContent =
-              d.media.name ||
-              "Documento";
-
-            const type =
-              document.createElement(
-                "div"
-              );
-
-            type.className =
-              "document-type";
-
-            type.textContent =
-              mediaType;
-
-            info.appendChild(name);
-            info.appendChild(type);
-
-            const download =
-              document.createElement(
-                "a"
-              );
-
-            download.className =
-              "document-download";
-
-            download.href = url;
-
-            download.download =
-              d.media.name ||
-              "arquivo";
-
-            download.target = "_blank";
-
-            download.rel =
-              "noopener noreferrer";
-
-            download.textContent =
-              "Baixar";
-
-            el.appendChild(icon);
-            el.appendChild(info);
-            el.appendChild(download);
           }
 
 
@@ -3774,14 +1897,20 @@ function startReply(m) {
 
   $("messageInput")
     ?.focus();
+}
 
-  $("cancelReply").onclick = () => {
-    $("replyBar")
-      ?.classList
-      .add("hidden");
 
-    replyTarget = null;
-  };
+if ($("cancelReply")) {
+
+  $("cancelReply").onclick =
+    () => {
+
+      $("replyBar")
+        ?.classList
+        .add("hidden");
+
+      replyTarget = null;
+    };
 }
 
 
@@ -3801,18 +1930,25 @@ async function react(
 
   if (!m) return;
 
+
   const reactions = {
     ...(m.raw?.reactions || {})
   };
 
+
   reactions[emoji] =
-    (reactions[emoji] || 0) + 1;
+    (
+      reactions[emoji] || 0
+    ) + 1;
+
 
   try {
 
     await updateDoc(
       doc(MSGS, id),
-      { reactions }
+      {
+        reactions
+      }
     );
 
   } catch (e) {
@@ -3841,6 +1977,7 @@ async function editMessage(m) {
       m.data.text || ""
     );
 
+
   if (
     text === null ||
     !text.trim() ||
@@ -3849,13 +1986,15 @@ async function editMessage(m) {
     return;
   }
 
+
   const other =
     await getOtherUid();
+
 
   if (!other) {
 
     showToast(
-      "A outra pessoa ainda não está pareada."
+      "A outra pessoa ainda não está disponível."
     );
 
     return;
@@ -3863,7 +2002,9 @@ async function editMessage(m) {
 
 
   const body = {
-    text: text.trim(),
+
+    text:
+      text.trim(),
 
     senderNick:
       m.data.senderNick ||
@@ -3887,14 +2028,15 @@ async function editMessage(m) {
   };
 
 
-  try {
+  const payload =
+    await encryptObject(
+      body,
+      other,
+      m.id
+    );
 
-    const payload =
-      await encryptObject(
-        body,
-        other,
-        m.id
-      );
+
+  try {
 
     await updateDoc(
       doc(MSGS, m.id),
@@ -3930,7 +2072,7 @@ async function editMessage(m) {
 
 
 /* =========================================================
-   APAGAR UMA MENSAGEM
+   APAGAR MENSAGEM
 ========================================================= */
 
 async function deleteMessage(m) {
@@ -3943,23 +2085,34 @@ async function deleteMessage(m) {
     return;
   }
 
+
   try {
 
     await deleteDoc(
       doc(MSGS, m.id)
     );
 
-    if (
-      m.data.media?.path
-    ) {
+    /*
+     * Os anexos são armazenados usando o próprio
+     * ID da mensagem:
+     *
+     * private/private-room/media/{id}.bin
+     *
+     * Portanto conseguimos remover o arquivo sem
+     * precisar descriptografar a mensagem.
+     */
 
-      await deleteObject(
-        ref(
-          storage,
-          m.data.media.path
-        )
-      ).catch(() => {});
-    }
+    const mediaRef =
+      ref(
+        storage,
+        `private/${ROOM_ID}/media/${m.id}.bin`
+      );
+
+    await deleteObject(
+      mediaRef
+    ).catch(
+      () => {}
+    );
 
   } catch (e) {
 
@@ -3969,7 +2122,7 @@ async function deleteMessage(m) {
     );
 
     showToast(
-      "Falha ao apagar a mensagem."
+      "Falha ao apagar."
     );
   }
 }
@@ -3980,190 +2133,216 @@ async function deleteMessage(m) {
 ========================================================= */
 
 /*
- * Apaga todas as mensagens da conversa.
+ * Remove TODAS as mensagens da sala para os dois usuários.
  *
- * IMPORTANTE:
- * - A operação exige confirmação.
- * - As mensagens do Firestore são apagadas.
- * - Os anexos existentes no Storage também são removidos.
- * - Como a coleção possui no máximo 500 mensagens carregadas
- *   pelo aplicativo, fazemos a consulta diretamente no Firestore.
+ * A função trabalha em páginas pequenas e sempre busca
+ * novamente o primeiro lote restante. Assim não existe o
+ * problema de pular documentos enquanto eles são apagados.
  *
- * A exclusão é feita individualmente para evitar depender
- * de uma operação de batch com quantidade desconhecida.
+ * Os anexos também são removidos. Como o nome do arquivo
+ * no Storage é baseado no ID do documento da mensagem,
+ * não é necessário descriptografar o conteúdo para saber
+ * qual arquivo deve ser excluído.
  */
-
-let clearingAllMessages = false;
-
 
 async function clearAllMessages() {
 
-  if (clearingAllMessages) {
-    return;
-  }
-
-
   if (!me) {
-
     showToast(
       "Sessão não autenticada."
     );
-
     return;
   }
 
 
-  const confirmation =
+  const firstConfirm =
     confirm(
-      "ATENÇÃO!\n\n" +
-      "Isso apagará TODAS as mensagens desta conversa " +
-      "para os dois dispositivos.\n\n" +
-      "As mensagens não poderão ser recuperadas.\n\n" +
-      "Deseja continuar?"
+      "ATENÇÃO! Isso apagará TODAS as mensagens da conversa para os dois dispositivos.\n\nDeseja continuar?"
     );
 
-  if (!confirmation) {
+  if (!firstConfirm) {
     return;
   }
 
 
-  /*
-   * Segunda confirmação para evitar
-   * apagamento acidental.
-   */
-
-  const secondConfirmation =
+  const secondConfirm =
     confirm(
-      "Confirma novamente?\n\n" +
-      "Todas as mensagens e anexos desta conversa " +
-      "serão apagados permanentemente."
+      "CONFIRMAÇÃO FINAL:\n\nTodas as mensagens e anexos serão apagados permanentemente. Esta ação não pode ser desfeita.\n\nApagar tudo?"
     );
 
-  if (!secondConfirmation) {
+  if (!secondConfirm) {
     return;
   }
 
 
-  clearingAllMessages = true;
+  const button =
+    $("clearMessagesBtn");
 
-  showToast(
-    "Limpando conversa…"
-  );
+
+  if (button) {
+
+    button.disabled =
+      true;
+
+    button.textContent =
+      "⏳ Apagando mensagens…";
+  }
+
+
+  let totalDeleted = 0;
 
 
   try {
 
     /*
-     * Busca todas as mensagens.
+     * Renovamos o token antes da operação,
+     * seguindo a mesma proteção utilizada
+     * no envio de mensagens.
      */
 
-    const snapshot =
-      await getDocs(
+    if (auth.currentUser) {
+
+      await getIdToken(
+        auth.currentUser,
+        true
+      );
+    }
+
+
+    /*
+     * Buscamos sempre o primeiro lote restante.
+     *
+     * Não usamos startAfter() porque os documentos
+     * são removidos durante a operação; buscar
+     * novamente o primeiro lote evita que algum
+     * documento seja pulado.
+     */
+
+    while (true) {
+
+      const q =
         query(
           MSGS,
-          limit(5000)
+          orderBy(
+            "createdAtMs",
+            "asc"
+          ),
+          limit(100)
+        );
+
+
+      const snap =
+        await getDocs(q);
+
+
+      if (snap.empty) {
+        break;
+      }
+
+
+      const docs =
+        snap.docs;
+
+
+      /*
+       * Primeiro removemos os arquivos de mídia.
+       *
+       * O arquivo é identificado pelo ID da mensagem.
+       * Se não existir mídia para determinada mensagem,
+       * o erro é simplesmente ignorado.
+       */
+
+      await Promise.allSettled(
+        docs.map(
+          d =>
+            deleteObject(
+              ref(
+                storage,
+                `private/${ROOM_ID}/media/${d.id}.bin`
+              )
+            )
         )
       );
 
 
-    /*
-     * Primeiro removemos os documentos
-     * do Firestore.
-     */
+      /*
+       * Depois removemos os documentos do Firestore.
+       *
+       * Fazemos deleteDoc individualmente para manter
+       * o comportamento compatível com as regras atuais.
+       */
 
-    const deletePromises = [];
+      for (const d of docs) {
 
-    snapshot.forEach(
-      messageDoc => {
-
-        deletePromises.push(
-          deleteDoc(
-            messageDoc.ref
-          )
+        await deleteDoc(
+          doc(MSGS, d.id)
         );
+
+        totalDeleted++;
       }
-    );
 
 
-    await Promise.all(
-      deletePromises
-    );
+      /*
+       * Atualiza a mensagem de progresso.
+       */
+
+      if (button) {
+
+        button.textContent =
+          `⏳ ${totalDeleted} mensagem(ns) apagada(s)…`;
+      }
+
+    }
 
 
     /*
-     * Depois removemos os anexos do Storage.
-     */
-
-    const mediaDeletePromises = [];
-
-    snapshot.forEach(
-      messageDoc => {
-
-        const data =
-          messageDoc.data();
-
-        const path =
-          data?.media?.path;
-
-        if (path) {
-
-          mediaDeletePromises.push(
-            deleteObject(
-              ref(storage, path)
-            ).catch(error => {
-
-              /*
-               * Se o arquivo já não existir,
-               * não interrompemos a limpeza.
-               */
-
-              console.warn(
-                "Não foi possível apagar anexo:",
-                path,
-                error
-              );
-            })
-          );
-        }
-      }
-    );
-
-
-    await Promise.all(
-      mediaDeletePromises
-    );
-
-
-    /*
-     * Limpa também o estado local
-     * imediatamente.
+     * Limpa imediatamente o estado local.
+     * O listener também atualizará a interface.
      */
 
     messages = [];
+
+    replyTarget = null;
+
+    $("replyBar")
+      ?.classList
+      .add("hidden");
 
     await renderMessages();
 
 
     showToast(
-      "Todas as mensagens foram apagadas."
+      totalDeleted > 0
+        ? `${totalDeleted} mensagem(ns) apagada(s) para os dois.`
+        : "A conversa já estava vazia."
     );
 
 
   } catch (e) {
 
     console.error(
-      "Erro ao limpar conversa:",
+      "Falha ao limpar todas as mensagens:",
       e
     );
 
+
     showToast(
-      e?.message ||
-      "Não foi possível limpar a conversa."
+      e?.code === "permission-denied"
+        ? "Sem autorização para limpar a conversa."
+        : "Não foi possível limpar todas as mensagens."
     );
+
 
   } finally {
 
-    clearingAllMessages = false;
+    if (button) {
+
+      button.disabled =
+        false;
+
+      button.textContent =
+        "🗑️ Limpar todas as mensagens";
+    }
   }
 }
 
@@ -4177,14 +2356,13 @@ async function encryptAttachment(
   otherUid
 ) {
 
-  /*
-   * Limite de 8 MB.
-   */
-
   const max =
     8 * 1024 * 1024;
 
-  if (file.size > max) {
+
+  if (
+    file.size > max
+  ) {
 
     throw new Error(
       "Para manter o app simples, anexos ficam limitados a 8 MB."
@@ -4243,16 +2421,8 @@ async function encryptAttachment(
     iv:
       b64(iv),
 
-    /*
-     * Guardamos o MIME type original.
-     * Isso é fundamental para que documentos,
-     * imagens, áudio e outros arquivos possam
-     * ser reconstruídos corretamente.
-     */
-
     type:
-      file.type ||
-      "application/octet-stream",
+      file.type,
 
     name:
       file.name
@@ -4270,31 +2440,77 @@ async function decryptAttachment(
 ) {
 
   if (
-    !media?.path
+    !media ||
+    !media.path
   ) {
 
     throw new Error(
-      "Anexo inválido."
+      "Caminho da mídia não encontrado."
     );
   }
 
 
-  if (!otherUid) {
+  console.log(
+    "INICIANDO DOWNLOAD DA MÍDIA:",
+    {
+      path: media.path,
+      type: media.type,
+      name: media.name
+    }
+  );
 
-    throw new Error(
-      "Outro dispositivo não encontrado."
+
+  const storageRef =
+    ref(
+      storage,
+      media.path
     );
-  }
 
+
+  /*
+   * Impõe um limite de 30 segundos
+   * para o download.
+   *
+   * Assim o aplicativo nunca ficará
+   * indefinidamente em
+   * "Carregando mídia cifrada…".
+   */
 
   const cipher =
-    await getBytes(
-      ref(
-        storage,
-        media.path
-      )
-    );
+    await Promise.race([
 
+      getBytes(
+        storageRef,
+        10 * 1024 * 1024
+      ),
+
+      new Promise(
+        (_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  "Tempo limite ao baixar a mídia do Firebase Storage."
+                )
+              ),
+            30000
+          )
+      )
+
+    ]);
+
+
+  console.log(
+    "MÍDIA BAIXADA:",
+    cipher.byteLength,
+    "bytes"
+  );
+
+
+  /*
+   * Recupera o segredo compartilhado
+   * entre os dois dispositivos.
+   */
 
   const secret =
     await getSharedSecret(
@@ -4302,27 +2518,52 @@ async function decryptAttachment(
     );
 
 
+  /*
+   * Recria exatamente a mesma chave
+   * utilizada durante a criptografia
+   * do anexo.
+   */
+
   const key =
     await deriveMessageKey(
       secret,
-      unb64(media.salt)
+      unb64(
+        media.salt
+      )
     );
+
+
+  console.log(
+    "DESCRIPTOGRAFANDO MÍDIA..."
+  );
 
 
   const plain =
     await crypto.subtle.decrypt(
       {
         name: "AES-GCM",
+
         iv:
-          unb64(media.iv)
+          unb64(
+            media.iv
+          )
       },
+
       key,
+
       cipher
     );
 
 
+  console.log(
+    "MÍDIA DESCRIPTOGRAFADA COM SUCESSO."
+  );
+
+
   return new Blob(
-    [plain],
+    [
+      plain
+    ],
     {
       type:
         media.type ||
@@ -4333,21 +2574,212 @@ async function decryptAttachment(
 
 
 /* =========================================================
+   CONTROLE DA SESSÃO
+========================================================= */
+
+/*
+ * Atualiza visualmente o estado do botão de envio.
+ *
+ * A ideia é impedir que o usuário tente enviar
+ * antes que a sessão esteja completamente pronta.
+ */
+
+function updateSendState() {
+
+  const btn =
+    $("sendBtn");
+
+  if (!btn) return;
+
+
+  /*
+   * Não alteramos a aparência normal do botão
+   * quando a sessão já estiver pronta.
+   */
+
+  btn.disabled =
+    !sessionReady;
+
+
+  if (!sessionReady) {
+
+    btn.title =
+      "Aguardando conexão segura…";
+
+  } else {
+
+    btn.title =
+      "Enviar mensagem";
+  }
+}
+
+
+/*
+ * Atualiza o status textual da conexão sem
+ * sobrescrever estados mais específicos.
+ */
+
+function updateConnectionState(
+  text
+) {
+
+  const status =
+    $("status");
+
+  if (!status) return;
+
+  status.textContent =
+    text;
+}
+
+
+/*
+ * Resolve a promessa da inicialização somente
+ * quando os três listeners essenciais tiverem
+ * sido inicializados.
+ */
+
+function checkSessionReady() {
+
+  if (
+    keysReady &&
+    messagesReady &&
+    statusReady
+  ) {
+
+    sessionReady = true;
+
+    updateSendState();
+
+    if (
+      sessionInitResolve
+    ) {
+
+      sessionInitResolve();
+
+      sessionInitResolve =
+        null;
+    }
+  }
+}
+
+
+/*
+ * Aguarda a sessão ficar pronta.
+ */
+
+function waitForSessionReady() {
+
+  if (
+    sessionReady
+  ) {
+    return Promise.resolve();
+  }
+
+
+  if (
+    !sessionInitPromise
+  ) {
+
+    sessionInitPromise =
+      new Promise(
+        resolve => {
+          sessionInitResolve =
+            resolve;
+        }
+      );
+  }
+
+
+  return sessionInitPromise;
+}
+
+
+/*
+ * Reseta o estado da sessão quando
+ * precisamos reconstruir os listeners.
+ */
+
+function resetSessionState() {
+
+  sessionReady = false;
+
+  keysReady = false;
+
+  messagesReady = false;
+
+  statusReady = false;
+
+  sessionInitPromise =
+    null;
+
+  sessionInitResolve =
+    null;
+
+  sharedSecretCache.clear();
+
+  updateSendState();
+}
+
+
+/* =========================================================
    ENVIO DE MENSAGEM
 ========================================================= */
 
 async function sendMessage() {
 
   /*
-   * Impede dois envios simultâneos.
+   * Se o usuário clicar durante a inicialização,
+   * aguardamos em vez de simplesmente falhar.
    */
 
-  if (sendingMessage) {
-    return;
+  if (!sessionReady) {
+
+    showToast(
+      "Aguardando conexão segura…"
+    );
+
+    try {
+
+      await Promise.race([
+        waitForSessionReady(),
+
+        new Promise(
+          (_, reject) =>
+            setTimeout(
+              () =>
+                reject(
+                  new Error(
+                    "Tempo limite aguardando a conexão segura."
+                  )
+                ),
+              10000
+            )
+        )
+      ]);
+
+    } catch (e) {
+
+      console.warn(
+        "Sessão ainda não está pronta:",
+        e
+      );
+
+      showToast(
+        "A conexão segura ainda não está pronta."
+      );
+
+      return;
+    }
   }
+
 
   const input =
     $("messageInput");
+
+
+  if (!input) return;
+
 
   const text =
     input.value.trim();
@@ -4375,14 +2807,71 @@ async function sendMessage() {
   }
 
 
-  sendingMessage = true;
-
-
   const sendBtn =
     $("sendBtn");
 
+
+  /*
+   * Impede dois envios simultâneos.
+   * Isso é especialmente importante para
+   * anexos, pois a criptografia e o upload
+   * podem levar alguns segundos.
+   */
+
+  if (
+    sendBtn?.dataset.sending ===
+    "1"
+  ) {
+    return;
+  }
+
+
   if (sendBtn) {
-    sendBtn.disabled = true;
+
+    sendBtn.dataset.sending =
+      "1";
+
+    sendBtn.disabled =
+      true;
+
+    sendBtn.classList.add(
+      "sending"
+    );
+
+    sendBtn.textContent =
+      "⏳";
+
+    sendBtn.title =
+      selectedFile
+        ? "Enviando anexo cifrado…"
+        : "Enviando mensagem…";
+  }
+
+
+  /*
+   * Reforço de autenticação antes da gravação.
+   *
+   * Isso reduz a possibilidade de uma sessão
+   * recém-restaurada pelo navegador ainda estar
+   * utilizando um token antigo.
+   */
+
+  try {
+
+    if (auth.currentUser) {
+
+      await getIdToken(
+        auth.currentUser,
+        true
+      );
+    }
+
+  } catch (e) {
+
+    console.warn(
+      "Não foi possível renovar o token antes do envio:",
+      e
+    );
   }
 
 
@@ -4396,17 +2885,12 @@ async function sendMessage() {
   try {
 
     /*
-     * ANEXO
+     * Anexo
      */
 
     if (selectedFile) {
 
-      showToast(
-        "Criptografando anexo…"
-      );
-
-
-      const encryptedAttachment =
+      const e =
         await encryptAttachment(
           selectedFile,
           other
@@ -4417,17 +2901,12 @@ async function sendMessage() {
         `private/${ROOM_ID}/media/${id}.bin`;
 
 
-      /*
-       * O conteúdo armazenado no Firebase Storage
-       * continua sendo somente o arquivo cifrado.
-       */
-
       await uploadBytes(
         ref(
           storage,
           path
         ),
-        encryptedAttachment.cipher,
+        e.cipher,
         {
           contentType:
             "application/octet-stream",
@@ -4443,22 +2922,22 @@ async function sendMessage() {
         path,
 
         type:
-          encryptedAttachment.type,
+          e.type,
 
         name:
-          encryptedAttachment.name,
+          e.name,
 
         salt:
-          encryptedAttachment.salt,
+          e.salt,
 
         iv:
-          encryptedAttachment.iv
+          e.iv
       };
     }
 
 
     /*
-     * CORPO DA MENSAGEM
+     * Corpo da mensagem.
      */
 
     const body = {
@@ -4489,7 +2968,7 @@ async function sendMessage() {
 
 
     /*
-     * CIFRA O CONTEÚDO DA MENSAGEM.
+     * Criptografia da mensagem.
      */
 
     const encrypted =
@@ -4500,53 +2979,112 @@ async function sendMessage() {
       );
 
 
+    const messageData = {
+
+      senderUid:
+        me.uid,
+
+      senderNick:
+        myNick,
+
+      ciphertext:
+        encrypted.ciphertext,
+
+      salt:
+        encrypted.salt,
+
+      iv:
+        encrypted.iv,
+
+      v:
+        encrypted.v,
+
+      createdAt:
+        serverTimestamp(),
+
+      createdAtMs:
+        Date.now(),
+
+      seenBy: [
+        me.uid
+      ],
+
+      edited: false,
+
+      reactions: {}
+    };
+
+
     /*
-     * Salva apenas os metadados públicos
-     * e o conteúdo cifrado.
+     * Primeira tentativa.
      */
 
-    await setDoc(
-      doc(MSGS, id),
-      {
+    try {
 
-        senderUid:
-          me.uid,
+      await setDoc(
+        doc(MSGS, id),
+        messageData
+      );
 
-        senderNick:
-          myNick,
+    } catch (firstError) {
 
-        ciphertext:
-          encrypted.ciphertext,
+      /*
+       * Se o Firebase ainda estiver
+       * reconstruindo a autenticação depois
+       * de um reload, renovamos o token e
+       * fazemos uma segunda tentativa.
+       */
 
-        salt:
-          encrypted.salt,
+      if (
+        firstError?.code ===
+        "permission-denied"
+      ) {
 
-        iv:
-          encrypted.iv,
+        console.warn(
+          "Permission denied na primeira tentativa. Renovando autenticação…"
+        );
 
-        v:
-          encrypted.v,
 
-        createdAt:
-          serverTimestamp(),
+        if (
+          auth.currentUser
+        ) {
 
-        createdAtMs:
-          Date.now(),
+          await getIdToken(
+            auth.currentUser,
+            true
+          );
+        }
 
-        seenBy: [
-          me.uid
-        ],
 
-        edited:
-          false,
+        /*
+         * Pequeno intervalo para permitir
+         * que o estado de autenticação seja
+         * propagado pelo SDK.
+         */
 
-        reactions: {}
+        await new Promise(
+          resolve =>
+            setTimeout(
+              resolve,
+              250
+            )
+        );
+
+
+        await setDoc(
+          doc(MSGS, id),
+          messageData
+        );
+
+      } else {
+
+        throw firstError;
       }
-    );
+    }
 
 
     /*
-     * Limpa o campo de mensagem.
+     * Limpeza da interface.
      */
 
     input.value = "";
@@ -4555,17 +3093,16 @@ async function sendMessage() {
       "auto";
 
 
-    /*
-     * Limpa o anexo selecionado.
-     */
+    selectedFile =
+      null;
 
-    selectedFile = null;
 
     const fileInput =
       $("fileInput");
 
     if (fileInput) {
-      fileInput.value = "";
+      fileInput.value =
+        "";
     }
 
 
@@ -4575,15 +3112,13 @@ async function sendMessage() {
     }
 
 
-    /*
-     * Cancela resposta.
-     */
-
     $("replyBar")
       ?.classList
       .add("hidden");
 
-    replyTarget = null;
+
+    replyTarget =
+      null;
 
 
     await saveStatus(
@@ -4594,21 +3129,68 @@ async function sendMessage() {
   } catch (e) {
 
     console.error(
-      "Erro ao enviar mensagem/anexo:",
+      "Erro ao enviar mensagem:",
       e
     );
 
-    showToast(
-      e?.message ||
-      "Não foi possível enviar."
-    );
 
+    /*
+     * Se um anexo foi enviado para o
+     * Storage mas a mensagem não chegou
+     * ao Firestore, tentamos removê-lo.
+     */
+
+    if (
+      media?.path
+    ) {
+
+      await deleteObject(
+        ref(
+          storage,
+          media.path
+        )
+      ).catch(
+        () => {}
+      );
+    }
+
+
+    const errorMessage =
+      e?.code === "storage/unauthorized"
+        ? "O Firebase recusou o envio do anexo."
+        : e?.code === "storage/quota-exceeded"
+          ? "O armazenamento do Firebase atingiu o limite."
+          : e?.code === "storage/canceled"
+            ? "O envio do anexo foi cancelado."
+            : e?.message ||
+              "Não foi possível enviar.";
+
+    showToast(
+      selectedFile
+        ? "Falha ao enviar anexo: " + errorMessage
+        : errorMessage
+    );
   } finally {
 
-    sendingMessage = false;
-
     if (sendBtn) {
-      sendBtn.disabled = false;
+
+      sendBtn.dataset.sending =
+        "0";
+
+      sendBtn.disabled =
+        !sessionReady;
+
+      sendBtn.classList.remove(
+        "sending"
+      );
+
+      sendBtn.textContent =
+        "➤";
+
+      sendBtn.title =
+        sessionReady
+          ? "Enviar mensagem"
+          : "Aguardando conexão segura…";
     }
   }
 }
@@ -4627,6 +3209,15 @@ async function decryptMessages(raw) {
   for (const d of raw) {
 
     try {
+
+      /*
+       * Mensagens enviadas por nós precisam
+       * ser descriptografadas usando a chave
+       * do outro usuário.
+       *
+       * Mensagens recebidas usam a chave
+       * pública do remetente.
+       */
 
       const body =
         await decryptObject(
@@ -4669,12 +3260,11 @@ async function decryptMessages(raw) {
 
     } catch (e) {
 
-      console.warn(
-        "Não foi possível descriptografar mensagem:",
-        d.id,
-        e
-      );
-
+      /*
+       * Se a mensagem não puder ser
+       * descriptografada, não expomos
+       * nenhum conteúdo parcial.
+       */
 
       out.push({
 
@@ -4706,7 +3296,6 @@ async function decryptMessages(raw) {
     }
   }
 
-
   return out;
 }
 
@@ -4717,13 +3306,36 @@ async function decryptMessages(raw) {
 
 function listenKeys() {
 
+  /*
+   * Remove listener anterior.
+   */
+
   unsubscribeKeys?.();
+
+
+  /*
+   * Sempre que reconstruirmos os listeners,
+   * a sessão volta temporariamente a ficar
+   * "não pronta".
+   */
+
+  keysReady = false;
+
+  sessionReady = false;
+
+  updateSendState();
 
 
   unsubscribeKeys =
     onSnapshot(
+
       KEYS,
+
       snap => {
+
+        /*
+         * Reconstrói o cache de chaves.
+         */
 
         keyCache =
           new Map();
@@ -4739,52 +3351,114 @@ function listenKeys() {
 
 
         /*
-         * Se uma chave pública mudou,
-         * precisamos descartar o segredo compartilhado
-         * armazenado em memória.
+         * Se as chaves mudaram, o segredo
+         * compartilhado anterior não deve
+         * ser reutilizado.
          */
 
         sharedSecretCache.clear();
 
 
+        /*
+         * Verifica se o outro usuário
+         * já publicou sua chave pública.
+         */
+
         const other =
           [...keyCache.keys()]
             .find(
-              x => x !== me.uid
+              x =>
+                x !== me.uid
             );
 
 
         if (!other) {
 
-          $("status").textContent =
-            "Aguardando o outro dispositivo…";
+          keysReady = false;
+
+          if (
+            connectionState !==
+              "offline" &&
+            connectionState !==
+              "reconnecting"
+          ) {
+
+            updateConnectionState(
+              "Aguardando o outro dispositivo…"
+            );
+          }
+
+          updateSendState();
 
           return;
         }
 
 
-        const otherData =
-          keyCache.get(other);
+        /*
+         * A chave do outro dispositivo
+         * está disponível.
+         */
+
+        keysReady = true;
 
 
-        $("status").textContent =
-          "Conversa cifrada • " +
-          (
-            otherData?.nick ||
-            "online"
+        if (
+          connectionState ===
+          "online"
+        ) {
+
+          updateConnectionState(
+            "Conexão cifrada • " +
+            (
+              keyCache.get(
+                other
+              )?.nick ||
+              "online"
+            )
           );
+        }
+
+
+        checkSessionReady();
       },
+
 
       error => {
 
         console.error(
-          "Erro ao sincronizar chaves:",
+          "LISTENER DE CHAVES:",
           error
         );
 
-        showToast(
-          "Falha na sincronização das chaves."
-        );
+
+        keysReady = false;
+
+        sessionReady = false;
+
+        updateSendState();
+
+
+        if (
+          error?.code ===
+          "permission-denied"
+        ) {
+
+          connectionState =
+            "error";
+
+          updateConnectionState(
+            "problema de autorização"
+          );
+
+        } else {
+
+          connectionState =
+            "reconnecting";
+
+          updateConnectionState(
+            "reconectando…"
+          );
+        }
       }
     );
 }
@@ -4796,15 +3470,24 @@ function listenKeys() {
 
 function listenMessages() {
 
+  /*
+   * Remove listener anterior.
+   */
+
   unsubscribeMessages?.();
 
 
   /*
-   * Ordenação pela data local de criação.
-   *
-   * Isso evita depender do serverTimestamp()
-   * para ordenar imediatamente uma mensagem recém-criada.
+   * A sessão deixa temporariamente
+   * de estar pronta durante a reconstrução.
    */
+
+  messagesReady = false;
+
+  sessionReady = false;
+
+  updateSendState();
+
 
   const q =
     query(
@@ -4824,18 +3507,37 @@ function listenMessages() {
 
       async snap => {
 
+        /*
+         * Listener respondeu.
+         * Isso significa que o Firebase
+         * conseguiu ler a coleção.
+         */
+
+        messageListenerRetryCount =
+          0;
+
+
+        connectionState =
+          "online";
+
+
         const raw = [];
 
-        snap.forEach(
-          d => {
 
+        snap.forEach(
+          d =>
             raw.push({
               id: d.id,
               ...d.data()
-            });
-          }
+            })
         );
 
+
+        /*
+         * Descriptografa as mensagens
+         * antes de liberar completamente
+         * a interface.
+         */
 
         messages =
           await decryptMessages(
@@ -4845,37 +3547,147 @@ function listenMessages() {
 
         await renderMessages();
 
-        markSeen();
 
-        expireOldMessages();
+        /*
+         * Agora sabemos que o listener
+         * de mensagens está efetivamente
+         * operacional.
+         */
+
+        messagesReady = true;
+
+
+        checkSessionReady();
+
+
+        /*
+         * Essas operações não podem impedir
+         * o recebimento das mensagens.
+         */
+
+        markSeen()
+          .catch(
+            () => {}
+          );
+
+
+        expireOldMessages()
+          .catch(
+            () => {}
+          );
       },
 
 
       error => {
 
         console.error(
-          "Erro no listener das mensagens:",
-          error
+          "LISTENER DE MENSAGENS:",
+          {
+            code:
+              error?.code,
+
+            message:
+              error?.message
+          }
         );
+
+
+        messagesReady = false;
+
+        sessionReady = false;
+
+        updateSendState();
+
 
         /*
-         * Não derruba a sessão.
-         *
-         * O listener continua sendo tratado
-         * pelo Firestore e a interface permanece
-         * aberta.
+         * Permission denied é tratado
+         * separadamente.
          */
 
-        showToast(
-          "Falha na sincronização das mensagens."
+        if (
+          error?.code ===
+          "permission-denied"
+        ) {
+
+          connectionState =
+            "error";
+
+          updateConnectionState(
+            "problema de autorização"
+          );
+
+          showToast(
+            "O Firebase recusou o acesso à conversa."
+          );
+
+          return;
+        }
+
+
+        /*
+         * Outros erros podem ser
+         * temporários.
+         */
+
+        connectionState =
+          "reconnecting";
+
+
+        updateConnectionState(
+          "reconectando…"
         );
+
+
+        if (
+          messageListenerRetry
+        ) {
+
+          clearTimeout(
+            messageListenerRetry
+          );
+        }
+
+
+        /*
+         * Backoff progressivo:
+         *
+         * 2s
+         * 4s
+         * 8s
+         * 16s
+         * 30s máximo
+         */
+
+        const delay =
+          Math.min(
+            30000,
+            2000 *
+              Math.pow(
+                2,
+                messageListenerRetryCount
+              )
+          );
+
+
+        messageListenerRetryCount++;
+
+
+        messageListenerRetry =
+          setTimeout(
+            () => {
+
+              listenMessages();
+
+            },
+            delay
+          );
       }
     );
 }
 
 
 /* =========================================================
-   MARCAR MENSAGENS COMO VISTAS
+   MARCAR MENSAGENS COMO LIDAS
 ========================================================= */
 
 async function markSeen() {
@@ -4883,29 +3695,33 @@ async function markSeen() {
   if (!me) return;
 
 
-  for (const m of messages) {
+  for (
+    const m of messages
+  ) {
 
     if (
-      m.data.senderUid !== me.uid &&
-      !(m.data.seenBy || [])
-        .includes(me.uid)
+      m.data.senderUid !==
+        me.uid &&
+      !(
+        m.data.seenBy || []
+      ).includes(
+        me.uid
+      )
     ) {
 
       updateDoc(
-        doc(MSGS, m.id),
+        doc(
+          MSGS,
+          m.id
+        ),
         {
           seenBy:
-            arrayUnion(me.uid)
+            arrayUnion(
+              me.uid
+            )
         }
       ).catch(
-        error => {
-
-          console.warn(
-            "Não foi possível marcar como vista:",
-            m.id,
-            error
-          );
-        }
+        () => {}
       );
     }
   }
@@ -4913,7 +3729,7 @@ async function markSeen() {
 
 
 /* =========================================================
-   MENSAGENS TEMPORÁRIAS
+   EXPIRAÇÃO DAS MENSAGENS
 ========================================================= */
 
 async function expireOldMessages() {
@@ -4927,27 +3743,24 @@ async function expireOldMessages() {
     Date.now();
 
 
-  for (const m of messages) {
+  for (
+    const m of messages
+  ) {
 
     const t =
       m.data.createdAtMs ||
       0;
 
 
-    /*
-     * Mantemos a mesma regra original:
-     * o dispositivo que enviou a mensagem
-     * é responsável por removê-la.
-     */
-
     if (
       t &&
       now - t >
         ttlSeconds * 1000 &&
-      m.raw?.senderUid === me.uid
+      m.raw?.senderUid ===
+        me.uid
     ) {
 
-      await deleteMessage(
+      deleteMessage(
         m
       );
     }
@@ -4956,12 +3769,23 @@ async function expireOldMessages() {
 
 
 /* =========================================================
-   STATUS / ONLINE / DIGITANDO
+   LISTENER DE STATUS
 ========================================================= */
 
 function listenStatus() {
 
+  /*
+   * Remove listener anterior.
+   */
+
   unsubscribeStatus?.();
+
+
+  statusReady = false;
+
+  sessionReady = false;
+
+  updateSendState();
 
 
   unsubscribeStatus =
@@ -4974,18 +3798,42 @@ function listenStatus() {
         const other =
           [...snap.docs]
             .map(
-              d => d.data()
+              d =>
+                d.data()
             )
             .find(
               x =>
-                x.uid !== me.uid
+                x.uid !==
+                me.uid
             );
+
+
+        /*
+         * O listener respondeu.
+         * Mesmo que o outro usuário ainda
+         * não tenha publicado status, o
+         * listener está funcional.
+         */
+
+        statusReady = true;
 
 
         if (!other) {
 
-          $("status").textContent =
-            "Conversa cifrada";
+          if (
+            connectionState !==
+              "offline" &&
+            connectionState !==
+              "reconnecting"
+          ) {
+
+            updateConnectionState(
+              "Conversa cifrada"
+            );
+          }
+
+
+          checkSessionReady();
 
           return;
         }
@@ -4994,840 +3842,221 @@ function listenStatus() {
         const active =
           other.lastActive?.toMillis
             ? Date.now() -
-                other.lastActive.toMillis()
-                < 90000
+                other.lastActive.toMillis() <
+              90000
             : false;
 
 
-        if (other.typing) {
+        if (
+          connectionState ===
+          "offline"
+        ) {
 
-          $("status").textContent =
-            "está a escrever…";
+          updateConnectionState(
+            "sem conexão"
+          );
+
+
+          checkSessionReady();
+
+          return;
+        }
+
+
+        if (
+          connectionState ===
+          "reconnecting"
+        ) {
+
+          updateConnectionState(
+            "reconectando…"
+          );
+
+
+          checkSessionReady();
+
+          return;
+        }
+
+
+        if (
+          connectionState ===
+          "error"
+        ) {
+
+          updateConnectionState(
+            "problema de conexão"
+          );
+
+
+          checkSessionReady();
+
+          return;
+        }
+
+
+        updateConnectionState(
+          other.typing
+            ? "está a escrever…"
+            : (
+                active
+                  ? "online"
+                  : "offline"
+              )
+        );
+
+
+        checkSessionReady();
+      },
+
+
+      error => {
+
+        console.error(
+          "LISTENER DE STATUS:",
+          error
+        );
+
+
+        statusReady = false;
+
+        sessionReady = false;
+
+        updateSendState();
+
+
+        if (
+          error?.code ===
+          "permission-denied"
+        ) {
+
+          connectionState =
+            "error";
+
+          updateConnectionState(
+            "problema de autorização"
+          );
 
         } else {
 
-          $("status").textContent =
-            active
-              ? "online"
-              : "offline";
+          connectionState =
+            "reconnecting";
+
+          updateConnectionState(
+            "reconectando…"
+          );
         }
-      },
-
-      error => {
-
-        console.warn(
-          "Falha no status:",
-          error
-        );
       }
     );
 }
 
 
 /* =========================================================
-   INICIALIZAÇÃO DA SESSÃO
+   RECONEXÃO — INTERNET VOLTOU
 ========================================================= */
 
-async function start() {
+window.addEventListener(
+  "online",
+  async () => {
 
-  await verifyMembership();
+    connectionState =
+      "reconnecting";
 
-  await ensureIdentity();
-
-
-  $("myAvatar").textContent =
-    initials(myNick);
-
-
-  $("authScreen")
-    ?.classList
-    .add("hidden");
+    updateConnectionState(
+      "reconectando…"
+    );
 
 
-  $("header")
-    ?.classList
-    .remove("hidden");
+    sessionReady = false;
 
+    keysReady = false;
 
-  $("footer")
-    ?.classList
-    .remove("hidden");
+    messagesReady = false;
 
+    statusReady = false;
 
-  /*
-   * Inicia os listeners.
-   */
+    updateSendState();
 
-  listenKeys();
-
-  listenMessages();
-
-  listenStatus();
-
-
-  await saveStatus(
-    false
-  );
-
-
-  await loadPin();
-
-  setupPinpad();
-
-
-  $("biometricBtn").textContent =
-    localStorage.getItem(
-      "ep_biometric_cred"
-    )
-      ? "Desbloquear com biometria"
-      : "Ativar biometria deste dispositivo";
-
-
-  /*
-   * Primeiro acesso:
-   * solicita criação do PIN.
-   */
-
-  if (!pinReady) {
 
     showToast(
-      "Crie um PIN de 6 dígitos para proteger este dispositivo."
+      "Conexão restaurada. Sincronizando…"
     );
 
-    $("lockScreen")
-      ?.classList
-      .remove("hidden");
-  }
-}
 
-
-/* =========================================================
-   LOGIN
-========================================================= */
-
-let startingSession =
-  false;
-
-
-if ($("authForm")) {
-
-  $("authForm").onsubmit =
-    async e => {
-
-      e.preventDefault();
-
-
-      $("authError").textContent =
-        "";
-
-
-      const email =
-        $("email")
-          .value
-          .trim();
-
-
-      const password =
-        $("password")
-          .value;
-
-
-      const nickname =
-        $("nickname")
-          .value
-          .trim();
-
-
-      if (!nickname) {
-
-        $("authError").textContent =
-          "Informe um nome/apelido para este dispositivo.";
-
-        return;
-      }
-
-
-      /*
-       * Guardamos temporariamente o apelido.
-       *
-       * O login do Firebase é assíncrono.
-       * Portanto, onAuthStateChanged continua sendo
-       * o único ponto responsável por iniciar a sessão.
-       */
-
-      sessionStorage.setItem(
-        "ep_pending_nick",
-        nickname
-      );
-
-
-      try {
-
-        await signInWithEmailAndPassword(
-          auth,
-          email,
-          password
-        );
-
-      } catch (err) {
-
-        sessionStorage.removeItem(
-          "ep_pending_nick"
-        );
-
-
-        console.error(
-          "Erro no login:",
-          err
-        );
-
-
-        $("authError").textContent =
-          err.code ===
-          "auth/invalid-credential"
-
-            ? "E-mail ou senha inválidos."
-
-            : (
-                err.message ||
-                "Não foi possível entrar."
-              );
-      }
-    };
-}
-
-
-/* =========================================================
-   ESTADO DE AUTENTICAÇÃO
-========================================================= */
-
-onAuthStateChanged(
-  auth,
-  async user => {
-
-    if (!user) {
-
-      me = null;
-
-      return;
-    }
+    messageListenerRetryCount =
+      0;
 
 
     /*
-     * Evita inicializar duas sessões simultaneamente.
+     * Primeiro damos ao navegador
+     * um pequeno intervalo para estabilizar
+     * a conexão.
      */
 
-    if (
-      startingSession ||
-      me?.uid === user.uid
-    ) {
-      return;
-    }
-
-
-    startingSession = true;
-
-    me = user;
-
-
-    /*
-     * Recupera o apelido.
-     */
-
-    const pendingNick =
-      sessionStorage.getItem(
-        "ep_pending_nick"
-      ) || "";
-
-
-    myNick =
-      pendingNick ||
-      localStorage.getItem(
-        "ep_nick_" + me.uid
-      ) ||
-      "";
-
-
-    /*
-     * Sem apelido não iniciamos a sessão.
-     */
-
-    if (!myNick) {
-
-      startingSession = false;
-
-      me = null;
-
-
-      await signOut(
-        auth
-      ).catch(
-        () => {}
-      );
-
-
-      $("authScreen")
-        ?.classList
-        .remove("hidden");
-
-
-      return;
-    }
-
-
-    localStorage.setItem(
-      "ep_nick_" + me.uid,
-      myNick
-    );
-
-
-    sessionStorage.removeItem(
-      "ep_pending_nick"
-    );
-
-
-    try {
-
-      await start();
-
-    } catch (e) {
-
-      console.error(
-        "Falha ao iniciar sessão segura:",
-        e
-      );
-
-
-      const msg =
-        e?.message ||
-        "Não foi possível iniciar a sessão segura.";
-
-
-      me = null;
-
-      startingSession = false;
-
-
-      await signOut(
-        auth
-      ).catch(
-        () => {}
-      );
-
-
-      $("authScreen")
-        ?.classList
-        .remove("hidden");
-
-
-      $("authError").textContent =
-        "Não foi possível iniciar a sessão segura: " +
-        msg;
-    }
-
-
-    startingSession = false;
-  }
-);
-
-
-/* =========================================================
-   COMPOSITOR / ENVIO
-========================================================= */
-
-if ($("sendBtn")) {
-
-  $("sendBtn").onclick =
-    sendMessage;
-}
-
-
-if ($("messageInput")) {
-
-  $("messageInput")
-    .addEventListener(
-      "keydown",
-      e => {
-
-        if (
-          e.key === "Enter" &&
-          !e.shiftKey
-        ) {
-
-          e.preventDefault();
-
-          sendMessage();
-        }
-      }
-    );
-
-
-  $("messageInput")
-    .addEventListener(
-      "input",
-      () => {
-
-        const x =
-          $("messageInput");
-
-
-        x.style.height =
-          "auto";
-
-
-        x.style.height =
-          Math.min(
-            x.scrollHeight,
-            120
-          ) + "px";
-
-
-        saveStatus(
-          true
-        );
-
-
-        clearTimeout(
-          window.typingTimer
-        );
-
-
-        window.typingTimer =
-          setTimeout(
-            () =>
-              saveStatus(false),
-            2500
-          );
-      }
-    );
-}
-
-
-/* =========================================================
-   ANEXOS
-========================================================= */
-
-if ($("attachBtn")) {
-
-  $("attachBtn").onclick =
-    () =>
-      $("fileInput")?.click();
-}
-
-
-if ($("fileInput")) {
-
-  $("fileInput").onchange =
-    e => {
-
-      selectedFile =
-        e.target.files?.[0] ||
-        null;
-
-
-      if (selectedFile) {
-
-        showToast(
-          `${selectedFile.name} pronto para envio cifrado.`
-        );
-      }
-    };
-}
-
-
-/* =========================================================
-   EMOJIS
-========================================================= */
-
-if ($("emojiBtn")) {
-
-  $("emojiBtn").onclick =
-    () => {
-
-      const panel =
-        $("emojiPanel");
-
-
-      if (!panel) return;
-
-
-      panel.classList.toggle(
-        "hidden"
-      );
-
-
-      if (!panel.innerHTML) {
-
-        panel.innerHTML =
-          EMOJIS
-            .map(
-              emoji =>
-                `<button type="button">${emoji}</button>`
-            )
-            .join("");
-      }
-
-
-      panel
-        .querySelectorAll(
-          "button"
-        )
-        .forEach(
-          button => {
-
-            button.onclick =
-              () => {
-
-                const input =
-                  $("messageInput");
-
-                if (!input) return;
-
-
-                input.setRangeText(
-                  button.textContent,
-                  input.selectionStart,
-                  input.selectionEnd,
-                  "end"
-                );
-
-
-                input.focus();
-              };
+    setTimeout(
+      async () => {
+
+        try {
+
+          if (
+            auth.currentUser
+          ) {
+
+            await getIdToken(
+              auth.currentUser,
+              true
+            );
           }
-        );
-    };
-}
 
+        } catch (e) {
 
-/* =========================================================
-   BUSCA
-========================================================= */
+          console.warn(
+            "Token ainda não pôde ser atualizado:",
+            e
+          );
+        }
 
-if ($("searchBtn")) {
 
-  $("searchBtn").onclick =
-    () =>
-      $("searchBar")
-        ?.classList
-        .toggle("hidden");
-}
+        /*
+         * Reconstrói os três listeners.
+         */
 
+        listenKeys();
 
-if ($("searchInput")) {
+        listenMessages();
 
-  $("searchInput").oninput =
-    e => {
+        listenStatus();
 
-      searchText =
-        e.target.value;
-
-
-      renderMessages();
-    };
-}
-
-
-/* =========================================================
-   CONFIGURAÇÕES
-========================================================= */
-
-if ($("settingsBtn")) {
-
-  $("settingsBtn").onclick =
-    () => {
-
-      const modal =
-        $("settingsModal");
-
-      if (!modal) return;
-
-
-      modal.classList.remove(
-        "hidden"
-      );
-
-
-      $("autoLock").checked =
-        localStorage.getItem(
-          "ep_auto_lock"
-        ) === "1";
-
-
-      $("safeNotifications").checked =
-        localStorage.getItem(
-          "ep_safe_notifications"
-        ) !== "0";
-
-
-      $("ttl").value =
-        String(ttlSeconds);
-    };
-}
-
-
-if ($("closeSettings")) {
-
-  $("closeSettings").onclick =
-    () =>
-      $("settingsModal")
-        ?.classList
-        .add("hidden");
-}
-
-
-if ($("autoLock")) {
-
-  $("autoLock").onchange =
-    e =>
-      localStorage.setItem(
-        "ep_auto_lock",
-        e.target.checked
-          ? "1"
-          : "0"
-      );
-}
-
-
-if ($("safeNotifications")) {
-
-  $("safeNotifications").onchange =
-    e =>
-      localStorage.setItem(
-        "ep_safe_notifications",
-        e.target.checked
-          ? "1"
-          : "0"
-      );
-}
-
-
-if ($("ttl")) {
-
-  $("ttl").onchange =
-    e => {
-
-      ttlSeconds =
-        Number(
-          e.target.value
-        );
-
-
-      localStorage.setItem(
-        "ep_ttl",
-        String(ttlSeconds)
-      );
-    };
-}
-
-
-/* =========================================================
-   MODO ANOTAÇÕES
-========================================================= */
-
-if ($("hideNow")) {
-
-  $("hideNow").onclick =
-    () => {
-
-      $("settingsModal")
-        ?.classList
-        .add("hidden");
-
-      enterPanic();
-    };
-}
-
-
-/* =========================================================
-   LIMPAR TODAS AS MENSAGENS
-========================================================= */
-
-/*
- * Esta função é adicionada ao menu de configurações
- * para permitir a limpeza completa da conversa.
- *
- * O HTML precisa conter um botão com:
- *
- * id="clearMessagesBtn"
- *
- * Exemplo:
- *
- * <button
- *   class="secondary danger-button"
- *   id="clearMessagesBtn">
- *   Limpar todas as mensagens
- * </button>
- *
- * A função também pode ser chamada diretamente
- * pelo console através de:
- *
- * clearAllMessages()
- */
-
-if ($("clearMessagesBtn")) {
-
-  $("clearMessagesBtn").onclick =
-    async () => {
-
-      await clearAllMessages();
-    };
-}
-
-
-/* =========================================================
-   LOGOUT
-========================================================= */
-
-if ($("logoutBtn")) {
-
-  $("logoutBtn").onclick =
-    async () => {
-
-      try {
-
-        await saveStatus(
-          false
-        );
-
-      } catch (e) {
-
-        console.warn(
-          "Falha ao salvar status antes de sair:",
-          e
-        );
-      }
-
-
-      unsubscribeMessages?.();
-
-      unsubscribeKeys?.();
-
-      unsubscribeStatus?.();
-
-
-      await signOut(
-        auth
-      );
-
-
-      location.reload();
-    };
-}
-
-
-/* =========================================================
-   FIXADOS
-========================================================= */
-
-if ($("pinned")) {
-
-  $("pinned").onclick =
-    () => {};
-}
-
-
-/* =========================================================
-   FECHAR MENUS
-========================================================= */
-
-document.addEventListener(
-  "click",
-  () => {
-
-    document
-      .querySelectorAll(
-        ".menu"
-      )
-      .forEach(
-        x => x.remove()
-      );
-  }
-);
-
-
-/* =========================================================
-   VISIBILIDADE DA PÁGINA
-========================================================= */
-
-window.addEventListener(
-  "visibilitychange",
-  () => {
-
-    if (document.hidden) {
-
-      saveStatus(
-        false
-      );
-
-    } else {
-
-      updateActivity();
-
-      markSeen();
-    }
-  }
-);
-
-
-/* =========================================================
-   PAGE HIDE
-========================================================= */
-
-window.addEventListener(
-  "pagehide",
-  () => {
-
-    saveStatus(
-      false
+      },
+      500
     );
   }
 );
 
 
 /* =========================================================
-   SERVICE WORKER
+   RECONEXÃO — INTERNET CAIU
 ========================================================= */
 
-if (
-  "serviceWorker" in navigator
-) {
+window.addEventListener(
+  "offline",
+  () => {
 
-  navigator.serviceWorker
-    .register(
-      "./sw.js"
-    )
-    .catch(
-      error => {
+    connectionState =
+      "offline";
 
-        console.warn(
-          "Service Worker não registrado:",
-          error
-        );
-      }
+
+    sessionReady =
+      false;
+
+
+    updateSendState();
+
+
+    updateConnectionState(
+      "sem conexão"
     );
-}
 
-
-/* =========================================================
-   PROTEÇÃO CONTRA ENVIO DUPLO
-========================================================= */
-
-let sendingMessage =
-  false;
-
-
-/* =========================================================
-   EXPOSIÇÃO CONTROLADA DA FUNÇÃO DE LIMPEZA
-========================================================= */
-
-/*
- * Mantemos a função disponível globalmente apenas
- * para facilitar testes e manutenção.
- */
-
-window.clearAllMessages =
-  clearAllMessages;
 
     showToast(
       "Você está sem conexão."
@@ -5976,7 +4205,6 @@ async function start() {
       .remove("hidden");
   }
 }
-
 
 /* =========================================================
    LOGIN
@@ -6378,17 +4606,55 @@ if ($("attachBtn")) {
 if ($("fileInput")) {
 
   $("fileInput").onchange =
-    e => {
+    async e => {
 
       selectedFile =
         e.target.files?.[0] ||
         null;
 
 
-      if (selectedFile) {
+      if (!selectedFile) {
+        return;
+      }
+
+
+      /*
+       * Ao selecionar o arquivo, o envio começa
+       * automaticamente.
+       *
+       * Antes, este evento apenas mostrava:
+       *
+       * "arquivo pronto para envio cifrado"
+       *
+       * e aguardava um novo clique no botão Enviar.
+       *
+       * Agora o próprio onchange inicia
+       * a criptografia e o upload.
+       */
+
+      const file =
+        selectedFile;
+
+
+      showToast(
+        `${file.name} preparando anexo cifrado…`
+      );
+
+
+      try {
+
+        await sendMessage();
+
+      } catch (err) {
+
+        console.error(
+          "Falha ao iniciar envio do anexo:",
+          err
+        );
+
 
         showToast(
-          `${selectedFile.name} pronto para envio cifrado.`
+          "Não foi possível iniciar o envio do anexo."
         );
       }
     };
@@ -6830,6 +5096,7 @@ window.addEventListener(
   }
 );
 
+
 /* =========================================================
    PAGEHIDE
 ========================================================= */
@@ -6839,99 +5106,15 @@ window.addEventListener(
   () => {
 
     /*
-     * Ao fechar a aba/janela ou sair da página,
-     * informa que este dispositivo deixou
-     * de estar ativo.
+     * Não fazemos signOut aqui.
+     *
+     * O Firebase Auth deve preservar
+     * a sessão normalmente para que
+     * Ctrl+R não force novo login.
      */
 
-    saveStatus(false).catch(
-      () => {}
-    );
-  }
-);
-
-
-/* =========================================================
-   ONLINE / OFFLINE
-========================================================= */
-
-window.addEventListener(
-  "online",
-  () => {
-
-    connectionState =
-      "reconnecting";
-
-    updateConnectionState(
-      "reconectando…"
-    );
-
-
-    /*
-     * Pequeno atraso para permitir que
-     * o navegador restabeleça a conexão.
-     */
-
-    setTimeout(
-      () => {
-
-        if (
-          !me ||
-          !auth.currentUser
-        ) {
-          return;
-        }
-
-
-        try {
-
-          /*
-           * Renova o token antes de
-           * reconstruir os listeners.
-           */
-
-          auth.currentUser
-            .getIdToken(true)
-            .catch(
-              () => {}
-            );
-
-
-          listenKeys();
-
-          listenMessages();
-
-          listenStatus();
-
-          saveStatus(false)
-            .catch(
-              () => {}
-            );
-
-        } catch (e) {
-
-          console.warn(
-            "Falha ao reconstruir conexão:",
-            e
-          );
-        }
-
-      },
-      1000
-    );
-  }
-);
-
-
-window.addEventListener(
-  "offline",
-  () => {
-
-    connectionState =
-      "offline";
-
-    updateConnectionState(
-      "sem conexão"
+    saveStatus(
+      false
     );
   }
 );
@@ -6946,21 +5129,35 @@ if (
 ) {
 
   navigator.serviceWorker
-    .register("./sw.js")
+    .register(
+      "./sw.js",
+      {
+        /*
+         * Fundamental durante o
+         * desenvolvimento para evitar
+         * que o próprio sw.js seja
+         * reutilizado do cache.
+         */
+        updateViaCache: "none"
+      }
+    )
     .then(
       registration => {
 
-        console.log(
-          "Service Worker ativo:",
-          registration.scope
-        );
+        /*
+         * Verifica imediatamente se
+         * existe uma versão nova.
+         */
+
+        registration.update();
+
       }
     )
     .catch(
       error => {
 
         console.warn(
-          "Service Worker não pôde ser registrado:",
+          "Service Worker:",
           error
         );
       }
@@ -6969,35 +5166,5 @@ if (
 
 
 /* =========================================================
-   INICIALIZAÇÃO FINAL
+   FIM DO APP.JS
 ========================================================= */
-
-document.addEventListener(
-  "DOMContentLoaded",
-  () => {
-
-    /*
-     * Garante que o estado inicial
-     * do botão de envio seja coerente.
-     */
-
-    updateSendState();
-
-
-    /*
-     * Se já houver uma sessão Firebase
-     * restaurada pelo navegador, o
-     * onAuthStateChanged cuidará da
-     * inicialização completa.
-     */
-
-    if (
-      auth.currentUser
-    ) {
-
-      console.log(
-        "Sessão Firebase restaurada."
-      );
-    }
-  }
-);
