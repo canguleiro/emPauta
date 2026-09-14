@@ -2439,14 +2439,78 @@ async function decryptAttachment(
   otherUid
 ) {
 
-  const cipher =
-    await getBytes(
-      ref(
-        storage,
-        media.path
-      )
+  if (
+    !media ||
+    !media.path
+  ) {
+
+    throw new Error(
+      "Caminho da mídia não encontrado."
+    );
+  }
+
+
+  console.log(
+    "INICIANDO DOWNLOAD DA MÍDIA:",
+    {
+      path: media.path,
+      type: media.type,
+      name: media.name
+    }
+  );
+
+
+  const storageRef =
+    ref(
+      storage,
+      media.path
     );
 
+
+  /*
+   * Impõe um limite de 30 segundos
+   * para o download.
+   *
+   * Assim o aplicativo nunca ficará
+   * indefinidamente em
+   * "Carregando mídia cifrada…".
+   */
+
+  const cipher =
+    await Promise.race([
+
+      getBytes(
+        storageRef,
+        10 * 1024 * 1024
+      ),
+
+      new Promise(
+        (_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  "Tempo limite ao baixar a mídia do Firebase Storage."
+                )
+              ),
+            30000
+          )
+      )
+
+    ]);
+
+
+  console.log(
+    "MÍDIA BAIXADA:",
+    cipher.byteLength,
+    "bytes"
+  );
+
+
+  /*
+   * Recupera o segredo compartilhado
+   * entre os dois dispositivos.
+   */
 
   const secret =
     await getSharedSecret(
@@ -2454,27 +2518,52 @@ async function decryptAttachment(
     );
 
 
+  /*
+   * Recria exatamente a mesma chave
+   * utilizada durante a criptografia
+   * do anexo.
+   */
+
   const key =
     await deriveMessageKey(
       secret,
-      unb64(media.salt)
+      unb64(
+        media.salt
+      )
     );
+
+
+  console.log(
+    "DESCRIPTOGRAFANDO MÍDIA..."
+  );
 
 
   const plain =
     await crypto.subtle.decrypt(
       {
         name: "AES-GCM",
+
         iv:
-          unb64(media.iv)
+          unb64(
+            media.iv
+          )
       },
+
       key,
+
       cipher
     );
 
 
+  console.log(
+    "MÍDIA DESCRIPTOGRAFADA COM SUCESSO."
+  );
+
+
   return new Blob(
-    [plain],
+    [
+      plain
+    ],
     {
       type:
         media.type ||
