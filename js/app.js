@@ -119,6 +119,9 @@ let connectionState = "online";
 let messageListenerRetry = null;
 let messageListenerRetryCount = 0;
 
+// Controle para impedir que a sessão Firebase seja inicializada duas vezes.
+let startingSession = false;
+
 let pinHash =
   localStorage.getItem("ep_device_pin_hash") || "";
 
@@ -148,11 +151,6 @@ let statusReady = false;
 
 let sessionInitPromise = null;
 let sessionInitResolve = null;
-
-/* Evita que o listener de autenticação inicialize a sessão
- * mais de uma vez enquanto o Firebase ainda está processando
- * o usuário persistido no navegador. */
-let startingSession = false;
 
 
 /* =========================================================
@@ -1251,10 +1249,6 @@ function enterPanic() {
 
   screen.classList.remove("hidden");
 
-  /*
-   * O conteúdo visual é genérico e não expõe nenhuma
-   * referência à conversa privada.
-   */
   if (!screen.dataset.newsBuilt) {
 
     screen.innerHTML = `
@@ -1266,55 +1260,136 @@ function enterPanic() {
             <small>últimas notícias</small>
           </div>
         </div>
+
         <div class="news-top-actions">
-          <span class="news-search-icon" aria-hidden="true">⌕</span>
+          <button
+            class="news-search-button"
+            type="button"
+            aria-label="Pesquisar notícias"
+            title="Pesquisar"
+          >⌕</button>
+
           <button
             id="panicMenuButton"
             class="news-menu-button"
             type="button"
             aria-label="Abrir menu"
             title="Menu"
-          >
-            ☰
-          </button>
+          >☰</button>
         </div>
       </div>
 
-      <nav class="news-categories">
-        <span class="active">Início</span>
-        <span>Brasil</span>
-        <span>Mundo</span>
-        <span>Tecnologia</span>
-        <span>Política</span>
+      <nav class="news-categories" aria-label="Categorias">
+        <button class="active" data-news-filter="Todos">Início</button>
+        <button data-news-filter="Brasil">Brasil</button>
+        <button data-news-filter="Mundo">Mundo</button>
+        <button data-news-filter="Tecnologia">Tecnologia</button>
+        <button data-news-filter="Política">Política</button>
       </nav>
 
       <main class="news-feed">
-        <article class="news-lead">
-          <div class="news-kicker">EM DESTAQUE</div>
-          <h1>Informação em tempo real para acompanhar o que acontece</h1>
-          <p>Confira as principais atualizações e notícias do dia.</p>
-          <small>Agora · Atualizado recentemente</small>
+
+        <article class="news-lead news-story" data-news-category="Brasil">
+          <img
+            class="news-lead-image"
+            src="https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=900&q=80"
+            alt="Jornais e notícias"
+            loading="eager"
+          >
+          <div class="news-lead-body">
+            <div class="news-kicker">BRASIL · EM DESTAQUE</div>
+            <h1>Novas informações movimentam o noticiário desta manhã</h1>
+            <p>Confira os principais acontecimentos e as atualizações mais recentes.</p>
+            <div class="news-meta">
+              <span>Notícias Agora</span><span>·</span><span>Há 12 min</span>
+            </div>
+          </div>
         </article>
+
+        <div class="news-section-head">
+          <strong>Últimas notícias</strong>
+          <span>Atualizado agora</span>
+        </div>
 
         <div class="news-divider"></div>
 
-        <article class="news-item">
-          <div>
-            <span class="news-kicker">BRASIL</span>
-            <h2>Novas informações movimentam o noticiário desta manhã</h2>
-            <small>Há poucos minutos</small>
-          </div>
-          <div class="news-thumb">NEWS</div>
-        </article>
+        <div id="newsStories">
 
-        <article class="news-item">
-          <div>
-            <span class="news-kicker">TECNOLOGIA</span>
-            <h2>Aplicativos ganham novos recursos para usuários</h2>
-            <small>Hoje · 09:40</small>
-          </div>
-          <div class="news-thumb">TECH</div>
-        </article>
+          <article class="news-item news-story" data-news-category="Brasil">
+            <img class="news-thumb-image" src="https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?auto=format&fit=crop&w=320&q=80" alt="Congresso e política" loading="lazy">
+            <div class="news-item-body">
+              <span class="news-kicker">BRASIL</span>
+              <h2>Congresso retoma agenda com novas propostas em discussão</h2>
+              <small>Há 18 min · 3 min de leitura</small>
+            </div>
+          </article>
+
+          <article class="news-item news-story" data-news-category="Tecnologia">
+            <img class="news-thumb-image" src="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=320&q=80" alt="Tecnologia e eletrônicos" loading="lazy">
+            <div class="news-item-body">
+              <span class="news-kicker">TECNOLOGIA</span>
+              <h2>Novas ferramentas digitais prometem facilitar tarefas do dia a dia</h2>
+              <small>Há 27 min · 2 min de leitura</small>
+            </div>
+          </article>
+
+          <article class="news-item news-story" data-news-category="Mundo">
+            <img class="news-thumb-image" src="https://images.unsplash.com/photo-1521295121783-8a321d551ad2?auto=format&fit=crop&w=320&q=80" alt="Jornal internacional" loading="lazy">
+            <div class="news-item-body">
+              <span class="news-kicker">MUNDO</span>
+              <h2>Mercados internacionais acompanham novos indicadores econômicos</h2>
+              <small>Há 34 min · 4 min de leitura</small>
+            </div>
+          </article>
+
+          <article class="news-item news-story" data-news-category="Política">
+            <img class="news-thumb-image" src="https://images.unsplash.com/photo-1521295121783-8a321d551ad2?auto=format&fit=crop&w=320&q=80" alt="Notícias e política" loading="lazy">
+            <div class="news-item-body">
+              <span class="news-kicker">POLÍTICA</span>
+              <h2>Reuniões desta semana devem definir prioridades para os próximos dias</h2>
+              <small>Há 42 min · 3 min de leitura</small>
+            </div>
+          </article>
+
+          <article class="news-item news-story" data-news-category="Brasil">
+            <img class="news-thumb-image" src="https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=320&q=80" alt="Noticiário impresso" loading="lazy">
+            <div class="news-item-body">
+              <span class="news-kicker">BRASIL</span>
+              <h2>Serviços e cidades anunciam mudanças para os próximos dias</h2>
+              <small>Há 51 min · 3 min de leitura</small>
+            </div>
+          </article>
+
+          <article class="news-item news-story" data-news-category="Tecnologia">
+            <img class="news-thumb-image" src="https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=320&q=80" alt="Tecnologia e computador" loading="lazy">
+            <div class="news-item-body">
+              <span class="news-kicker">TECNOLOGIA</span>
+              <h2>Atualização de aplicativos amplia recursos de segurança e privacidade</h2>
+              <small>Há 1 h · 2 min de leitura</small>
+            </div>
+          </article>
+
+          <article class="news-item news-story" data-news-category="Mundo">
+            <img class="news-thumb-image" src="https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&w=320&q=80" alt="Paisagem internacional" loading="lazy">
+            <div class="news-item-body">
+              <span class="news-kicker">MUNDO</span>
+              <h2>Países anunciam novas iniciativas de cooperação internacional</h2>
+              <small>Há 1 h · 5 min de leitura</small>
+            </div>
+          </article>
+
+          <article class="news-item news-story" data-news-category="Política">
+            <img class="news-thumb-image" src="https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?auto=format&fit=crop&w=320&q=80" alt="Edifício público" loading="lazy">
+            <div class="news-item-body">
+              <span class="news-kicker">POLÍTICA</span>
+              <h2>Agenda pública reúne novos compromissos e encontros nesta tarde</h2>
+              <small>Há 1 h · 3 min de leitura</small>
+            </div>
+          </article>
+
+        </div>
+
+        <div class="news-more">Mais notícias · atualizado recentemente</div>
       </main>
 
       <textarea id="panicText" aria-hidden="true" tabindex="-1"></textarea>
@@ -1322,121 +1397,27 @@ function enterPanic() {
 
     screen.dataset.newsBuilt = "1";
 
-    /*
-     * O botão de menu do próprio aplicativo de notícias
-     * é a porta discreta para retornar ao chat privado.
-     * Primeiro tenta biometria, se configurada; caso
-     * contrário, usa o PIN do dispositivo. O antigo código
-     * específico do modo notícias permanece como fallback.
-     */
-    $("panicMenuButton").onclick =
-      authenticatePanicExit;
-  }
-}
+    /* Filtro visual das categorias, mantendo a aparência de um portal real. */
+    screen.querySelectorAll("[data-news-filter]").forEach(button => {
+      button.onclick = () => {
+        const filter = button.dataset.newsFilter;
 
+        screen.querySelectorAll("[data-news-filter]").forEach(b =>
+          b.classList.toggle("active", b === button)
+        );
 
-async function authenticatePanicExit() {
-
-  /*
-   * Se a biometria estiver cadastrada, ela é o primeiro
-   * método de autenticação para sair do disfarce.
-   */
-  if (
-    localStorage.getItem("ep_biometric_cred") &&
-    window.PublicKeyCredential &&
-    navigator.credentials
-  ) {
-
-    try {
-
-      const id =
-        localStorage.getItem("ep_biometric_cred");
-
-      const credential =
-        await navigator.credentials.get({
-          publicKey: {
-            challenge:
-              crypto.getRandomValues(
-                new Uint8Array(32)
-              ),
-
-            rpId:
-              location.hostname,
-
-            allowCredentials: [
-              {
-                type: "public-key",
-                id: fromBase64url(id)
-              }
-            ],
-
-            userVerification: "required",
-            timeout: 60000
-          }
+        screen.querySelectorAll(".news-story").forEach(story => {
+          const category = story.dataset.newsCategory;
+          story.classList.toggle(
+            "news-filter-hidden",
+            filter !== "Todos" && category !== filter
+          );
         });
+      };
+    });
 
-      if (credential) {
-        leavePanic();
-        return;
-      }
-
-    } catch (e) {
-
-      console.warn("Biometria para sair do disfarce:", e);
-
-      if (e?.name === "NotAllowedError") {
-        showToast("Biometria cancelada. Use o PIN para sair.");
-      }
-    }
-  }
-
-  /*
-   * Segundo método: PIN de 6 dígitos deste dispositivo.
-   */
-  if (pinReady) {
-
-    const code =
-      prompt("Digite o PIN para voltar ao chat");
-
-    if (code && await checkPin(code)) {
-      leavePanic();
-      return;
-    }
-
-    if (code) {
-      showToast("PIN incorreto.");
-    }
-
-    return;
-  }
-
-  /*
-   * Compatibilidade com instalações que ainda usam o
-   * código específico do modo notícias.
-   */
-  const panicCode =
-    localStorage.getItem("ep_panic_code");
-
-  if (panicCode) {
-
-    const code =
-      prompt("Código de saída");
-
-    if (code === panicCode) {
-      leavePanic();
-    } else {
-      showToast("Código incorreto.");
-    }
-
-    return;
-  }
-
-  const newCode =
-    prompt("Crie um código curto para sair do modo notícias");
-
-  if (newCode) {
-    localStorage.setItem("ep_panic_code", newCode);
-    leavePanic();
+    /* O menu continua sendo a porta discreta para voltar ao chat privado. */
+    $("panicMenuButton").onclick = authenticatePanicExit;
   }
 }
 
