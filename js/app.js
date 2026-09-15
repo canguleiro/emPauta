@@ -2,7 +2,7 @@
       initializeApp
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 
-    /* V16 — CrIArt como modo disfarce automático somente no mobile; desktop abre direto no chat. */
+    /* V17 — CrIArt como modo disfarce automático somente no mobile; desktop abre direto no chat. */
 
     import {
       getAuth,
@@ -1387,19 +1387,11 @@
               <div class="ai-top-actions">
                 <button
                   id="aiChatModeTop"
-                  class="ai-icon-button"
+                  class="ai-icon-button ai-settings-button"
                   type="button"
                   title="Abrir chat privado"
                   aria-label="Abrir chat privado"
-                >＋</button>
-
-                <button
-                  id="aiDeleteChatTop"
-                  class="ai-icon-button ai-delete-chat-button"
-                  type="button"
-                  title="Excluir conversa atual"
-                  aria-label="Excluir conversa atual"
-                >⌫</button>
+                >⚙️</button>
 
                 <button
                   id="panicMenuButton"
@@ -2281,12 +2273,6 @@
             authenticatePanicExit
           );
 
-        $("aiDeleteChatTop")
-          ?.addEventListener(
-            "click",
-            deleteActiveChat
-          );
-
 
         const input =
           $("aiInput");
@@ -2331,9 +2317,9 @@
 
 
         /*
-         * Os controles superiores podem abrir o chat privado.
-         * O botão + foi reservado para essa troca de modo;
-         * a lixeira exclui a conversa atual.
+         * O botão de engrenagem é a porta discreta para
+         * o chat privado. A exclusão continua disponível
+         * individualmente no histórico das conversas.
          */
         $("panicMenuButton").onclick =
           authenticatePanicExit;
@@ -2394,13 +2380,6 @@
           authenticatePanicExit;
       }
 
-      const deleteTop =
-        $("aiDeleteChatTop");
-
-      if (deleteTop) {
-        deleteTop.onclick =
-          deleteActiveChat;
-      }
 
 
       /*
