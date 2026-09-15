@@ -149,6 +149,11 @@ let statusReady = false;
 let sessionInitPromise = null;
 let sessionInitResolve = null;
 
+/* Evita que o listener de autenticação inicialize a sessão
+ * mais de uma vez enquanto o Firebase ainda está processando
+ * o usuário persistido no navegador. */
+let startingSession = false;
+
 
 /* =========================================================
    EMOJIS
