@@ -668,7 +668,7 @@ audio{
 
   width:100%;
 
-  min-height:42px;
+  min-height:44px;
 
   padding:10px 12px;
 
@@ -859,11 +859,11 @@ textarea{
   display:grid;
 
   grid-template-columns:
-    repeat(8,1fr);
+    repeat(9,1fr);
 
-  gap:3px;
+  gap:4px;
 
-  padding:8px;
+  padding:9px;
 
   background:#f8f8f7;
 
@@ -881,7 +881,7 @@ textarea{
 
   padding:7px;
 
-  font-size:21px;
+  font-size:22px;
 
   border-radius:8px;
 
@@ -1368,7 +1368,7 @@ header .actions{
 
   .emoji-panel{
     grid-template-columns:
-      repeat(7,1fr);
+      repeat(8,1fr);
 
     max-height:180px;
   }
