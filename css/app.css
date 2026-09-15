@@ -668,7 +668,7 @@ audio{
 
   width:100%;
 
-  min-height:44px;
+  min-height:42px;
 
   padding:10px 12px;
 
@@ -859,11 +859,11 @@ textarea{
   display:grid;
 
   grid-template-columns:
-    repeat(9,1fr);
+    repeat(8,1fr);
 
-  gap:4px;
+  gap:3px;
 
-  padding:9px;
+  padding:8px;
 
   background:#f8f8f7;
 
@@ -881,7 +881,7 @@ textarea{
 
   padding:7px;
 
-  font-size:22px;
+  font-size:21px;
 
   border-radius:8px;
 
@@ -1368,7 +1368,7 @@ header .actions{
 
   .emoji-panel{
     grid-template-columns:
-      repeat(8,1fr);
+      repeat(7,1fr);
 
     max-height:180px;
   }
@@ -1500,416 +1500,116 @@ header .actions{
 
 
 /* =========================================================
-   DISFARCE — INTERFACE DE CANAL DE NOTÍCIAS
+   AJUSTE FINAL — MENU DE MENSAGEM COMPACTO
 ========================================================= */
 
-.device-gate{
-  background:#f5f7f8;
-  color:#182126;
+.menu{
+  width:220px !important;
+  min-width:0 !important;
+  max-width:calc(100vw - 20px) !important;
+  border-radius:14px !important;
+  padding:4px 0 !important;
+  box-shadow:0 12px 30px #0003 !important;
 }
 
-.device-gate-card{
-  width:min(420px,calc(100% - 32px));
-  background:#fff;
-  border:1px solid #e1e6e8;
-  border-radius:22px;
-  padding:28px;
-  box-shadow:0 18px 50px #00000012;
+.menu button{
+  min-height:40px !important;
+  padding:9px 12px !important;
+  font-size:12px !important;
 }
 
-.news-mini-logo,
-.news-brand{
-  display:flex;
-  align-items:center;
-  gap:11px;
+.reaction-picker{
+  display:grid !important;
+  grid-template-columns:repeat(6, 30px) !important;
+  justify-content:center !important;
+  align-items:center !important;
+  gap:3px !important;
+  width:auto !important;
+  padding:8px 6px !important;
+  margin:0 0 4px !important;
 }
 
-.news-mini-mark,
-.news-brand-mark{
-  display:grid;
-  place-items:center;
-  width:40px;
-  height:40px;
-  border-radius:12px;
-  background:#173d34;
-  color:#fff;
-  font-weight:800;
-  font-size:21px;
-}
-
-.news-mini-logo strong,
-.news-brand strong{
-  display:block;
-  font-size:17px;
-  letter-spacing:-.2px;
-}
-
-.news-mini-logo small,
-.news-brand small{
-  display:block;
-  margin-top:2px;
-  color:#7a858a;
-  font-size:10px;
-}
-
-.device-gate-status{
-  margin-top:26px;
-  font-size:15px;
-  font-weight:700;
-}
-
-.device-gate-text{
-  margin:9px 0 0;
-  color:#5f6b70;
-  line-height:1.5;
-}
-
-.device-gate-hint{
-  margin-top:18px;
-  padding:12px 13px;
-  border-radius:12px;
-  background:#f1f5f4;
-  color:#60706d;
-  font-size:12px;
-  line-height:1.45;
-}
-
-.news-app-top{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  min-height:66px;
-  padding:calc(8px + var(--safe-top)) 16px 8px;
-  background:#fff;
-  border-bottom:1px solid #e4e8ea;
-}
-
-.news-top-actions{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  color:#465157;
-  font-size:22px;
-}
-
-.news-search-icon{
-  display:grid;
-  place-items:center;
-  width:36px;
-  height:36px;
-  color:#465157;
-  font-size:21px;
-}
-
-.news-menu-button{
-  display:grid;
-  place-items:center;
-  width:38px;
-  height:38px;
-  padding:0;
-  border:1px solid #e0e5e7;
-  border-radius:11px;
-  background:#fff;
-  color:#465157;
-  font:inherit;
-  font-size:21px;
-  line-height:1;
-  cursor:pointer;
-  transition:background .15s ease, border-color .15s ease, transform .15s ease;
-}
-
-.news-menu-button:hover{
-  background:#f3f6f5;
-  border-color:#d2dada;
-}
-
-.news-menu-button:active{
-  transform:scale(.96);
-}
-
-.news-menu-button:focus-visible{
-  outline:2px solid #173d34;
-  outline-offset:2px;
-}
-
-.news-categories{
-  display:flex;
-  gap:20px;
-  overflow:hidden;
-  white-space:nowrap;
-  padding:11px 16px;
-  background:#fff;
-  border-bottom:1px solid #e8ecee;
-  color:#69757b;
-  font-size:12px;
-  font-weight:700;
-}
-
-.news-categories .active{
-  color:#173d34;
-  position:relative;
-}
-
-.news-categories .active:after{
-  content:"";
-  position:absolute;
-  left:0;
-  right:0;
-  bottom:-11px;
-  height:2px;
-  background:#173d34;
-}
-
-.news-feed{
-  flex:1;
-  overflow:auto;
-  background:#f7f8f9;
-  padding:18px 16px 40px;
-}
-
-.news-lead{
-  background:#fff;
-  border:1px solid #e3e7e9;
-  border-radius:16px;
-  padding:18px;
-}
-
-.news-kicker{
-  color:#b24a32;
-  font-size:9px;
-  font-weight:800;
-  letter-spacing:.12em;
-}
-
-.news-lead h1{
-  margin:7px 0 8px;
-  font-size:24px;
-  line-height:1.08;
-  letter-spacing:-.5px;
-  color:#1c272c;
-}
-
-.news-lead p{
-  margin:0 0 13px;
-  color:#667278;
-  font-size:13px;
-  line-height:1.45;
-}
-
-.news-feed small{
-  color:#8a9499;
-  font-size:10px;
-}
-
-.news-divider{
-  height:1px;
-  margin:16px 4px;
-  background:#e1e5e7;
-}
-
-.news-item{
-  display:flex;
-  gap:12px;
-  align-items:center;
-  padding:14px 0;
-  border-bottom:1px solid #e2e6e8;
-}
-
-.news-item h2{
-  margin:5px 0 8px;
-  font-size:15px;
-  line-height:1.25;
-  color:#263238;
-}
-
-.news-thumb{
-  flex:0 0 78px;
-  height:58px;
-  display:grid;
-  place-items:center;
-  border-radius:10px;
-  background:#dde4e6;
-  color:#6c797e;
-  font-size:10px;
-  font-weight:800;
-}
-
-.news-secret{
-  position:absolute;
-  right:9px;
-  bottom:9px;
-  width:18px;
-  height:18px;
-  border:0;
-  border-radius:50%;
-  background:transparent;
-  color:#d7dcde;
-  font-size:8px;
-  padding:0;
-}
-
-.panic{
-  background:#f7f8f9;
-  color:#182126;
-  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-}
-
-@media(min-width:760px){
-  .news-app-top{padding-top:12px;}
-  .news-feed{padding-left:22px;padding-right:22px;}
+.reaction-picker-button{
+  width:30px !important;
+  height:30px !important;
+  min-width:30px !important;
+  padding:0 !important;
+  font-size:19px !important;
+  border-radius:8px !important;
 }
 
 /* =========================================================
-   MODO NOTÍCIAS — V6
+   AJUSTE FINAL — MODO DISFARCE IA NO MOBILE
 ========================================================= */
 
-.news-search-button{
-  display:grid;
-  place-items:center;
-  width:36px;
-  height:36px;
-  padding:0;
-  border:0;
-  background:transparent;
-  color:#465157;
-  font:inherit;
-  font-size:22px;
-  cursor:pointer;
-  border-radius:10px;
+@media(max-width:650px){
+  .ai-disguise-app{
+    width:100% !important;
+    max-width:100% !important;
+    height:100% !important;
+  }
+
+  .ai-topbar{
+    padding:0 10px !important;
+  }
+
+  .ai-layout,
+  .ai-main{
+    min-width:0 !important;
+    width:100% !important;
+  }
+
+  .ai-conversation{
+    padding:12px 10px 8px !important;
+  }
+
+  .ai-welcome{
+    width:min(100%,330px) !important;
+    margin:7vh auto 18px !important;
+  }
+
+  .ai-suggestions{
+    width:100% !important;
+    max-width:310px !important;
+    grid-template-columns:1fr !important;
+    gap:7px !important;
+  }
+
+  .ai-message{
+    max-width:100% !important;
+    margin-bottom:12px !important;
+  }
+
+  .ai-message-bubble{
+    max-width:92% !important;
+  }
+
+  .ai-composer-wrap{
+    padding:7px 7px 9px !important;
+  }
+
+  .ai-composer{
+    width:100% !important;
+    max-width:100% !important;
+    box-sizing:border-box !important;
+  }
 }
 
-.news-search-button:hover{
-  background:#f3f6f5;
-}
+@media(max-width:380px){
+  .menu{
+    width:212px !important;
+    max-width:calc(100vw - 16px) !important;
+  }
 
-.news-categories button{
-  flex:0 0 auto;
-  border:0;
-  padding:0;
-  background:transparent;
-  color:inherit;
-  font:inherit;
-  cursor:pointer;
-}
+  .reaction-picker{
+    grid-template-columns:repeat(6, 29px) !important;
+    gap:2px !important;
+  }
 
-.news-categories button.active{
-  color:#173d34;
-  position:relative;
-}
-
-.news-lead{
-  overflow:hidden;
-  padding:0;
-}
-
-.news-lead-image{
-  display:block;
-  width:100%;
-  height:150px;
-  object-fit:cover;
-}
-
-.news-lead-body{
-  padding:17px 18px 18px;
-}
-
-.news-lead h1{
-  font-size:21px;
-}
-
-.news-meta{
-  display:flex;
-  gap:6px;
-  align-items:center;
-  color:#8a9499;
-  font-size:10px;
-}
-
-.news-section-head{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin:20px 2px 0;
-  color:#263238;
-}
-
-.news-section-head strong{
-  font-size:15px;
-}
-
-.news-section-head span{
-  color:#8a9499;
-  font-size:10px;
-}
-
-.news-item{
-  align-items:stretch;
-  gap:12px;
-  min-height:82px;
-}
-
-.news-item-body{
-  min-width:0;
-  flex:1;
-}
-
-.news-thumb-image{
-  order:2;
-  flex:0 0 88px;
-  width:88px;
-  height:68px;
-  object-fit:cover;
-  border-radius:10px;
-  background:#dde4e6;
-}
-
-.news-item h2{
-  margin-top:4px;
-  margin-bottom:7px;
-  font-size:14px;
-}
-
-.news-more{
-  margin:18px 0 8px;
-  padding:14px 0 4px;
-  border-top:1px solid #e1e5e7;
-  text-align:center;
-  color:#8a9499;
-  font-size:10px;
-}
-
-.news-filter-hidden{
-  display:none !important;
-}
-
-@media(max-width:430px){
-  .news-lead-image{height:135px;}
-  .news-thumb-image{flex-basis:82px;width:82px;height:64px;}
-  .news-item h2{font-size:13.5px;}
-}
-
-
-/* =========================================================
-   DISFARCE — AJUSTES V7
-========================================================= */
-.news-lead-image,
-.news-thumb-image{
-  background:#dde6e1;
-}
-
-.news-lead-image{
-  object-position:center;
-}
-
-.news-thumb-image{
-  display:block;
-  flex-shrink:0;
-}
-
-.news-thumb-image[src^="data:image/svg+xml"]{
-  object-fit:cover;
-}
-
-.news-menu-button{
-  -webkit-tap-highlight-color:transparent;
+  .reaction-picker-button{
+    width:29px !important;
+    height:29px !important;
+    min-width:29px !important;
+    font-size:18px !important;
+  }
 }
