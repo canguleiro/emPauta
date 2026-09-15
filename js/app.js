@@ -1350,6 +1350,44 @@ function getAttachmentIcon(
 }
 
 
+/* =========================================================
+   ABERTURA DE ANEXOS
+========================================================= */
+
+function openAttachment(
+  url,
+  fileName,
+  mediaType
+) {
+
+  /*
+   * A abertura é feita diretamente por um link para o blob:
+   * URL. Isso evita bloqueios comuns de popup quando
+   * window.open() é usado depois de uma operação assíncrona.
+   */
+  const link =
+    document.createElement("a");
+
+  link.href =
+    url;
+
+  link.target =
+    "_blank";
+
+  link.rel =
+    "noopener noreferrer";
+
+  link.style.display =
+    "none";
+
+  document.body.appendChild(link);
+
+  link.click();
+
+  link.remove();
+}
+
+
 function formatAttachmentType(
   fileName,
   mediaType
@@ -1585,6 +1623,24 @@ async function renderMessages() {
             )
           ) {
 
+            /*
+             * IMAGEM + AÇÕES
+             *
+             * A imagem continua sendo exibida normalmente,
+             * mas agora recebe também um botão Baixar.
+             */
+            const imageAttachment =
+              document.createElement(
+                "div"
+              );
+
+            imageAttachment.className =
+              "image-attachment";
+
+            imageAttachment.style.position = "relative";
+            imageAttachment.style.display = "inline-block";
+            imageAttachment.style.maxWidth = "100%";
+
             el =
               document.createElement(
                 "img"
@@ -1601,13 +1657,70 @@ async function renderMessages() {
             el.loading =
               "lazy";
 
+            el.style.display = "block";
+
             el.onclick =
               () =>
-                window.open(
+                openAttachment(
                   url,
-                  "_blank",
-                  "noopener,noreferrer"
+                  fileName,
+                  mediaType
                 );
+
+            const imageActions =
+              document.createElement(
+                "div"
+              );
+
+            imageActions.className =
+              "image-attachment-actions";
+
+            imageActions.style.display = "flex";
+            imageActions.style.justifyContent = "flex-end";
+            imageActions.style.marginTop = "6px";
+
+            const imageDownload =
+              document.createElement(
+                "a"
+              );
+
+            imageDownload.href =
+              url;
+
+            imageDownload.download =
+              fileName;
+
+            imageDownload.textContent =
+              "Baixar";
+
+            imageDownload.className =
+              "image-attachment-download";
+
+            imageDownload.style.display = "inline-flex";
+            imageDownload.style.alignItems = "center";
+            imageDownload.style.justifyContent = "center";
+            imageDownload.style.padding = "5px 10px";
+            imageDownload.style.borderRadius = "8px";
+            imageDownload.style.background = "rgba(0,0,0,.08)";
+            imageDownload.style.color = "inherit";
+            imageDownload.style.textDecoration = "none";
+            imageDownload.style.fontSize = "12px";
+            imageDownload.style.fontWeight = "600";
+
+            imageActions.appendChild(
+              imageDownload
+            );
+
+            imageAttachment.appendChild(
+              el
+            );
+
+            imageAttachment.appendChild(
+              imageActions
+            );
+
+            el =
+              imageAttachment;
 
           } else if (
             mediaType.startsWith(
@@ -1727,27 +1840,41 @@ async function renderMessages() {
             actions.className =
               "document-attachment-actions";
 
+            /*
+             * Usamos um <a target="_blank"> em vez de
+             * window.open() disparado por JavaScript.
+             * Isso é mais confiável para blob: URLs criadas
+             * após a descriptografia.
+             *
+             * Para PDF, TXT e formatos que o navegador sabe
+             * exibir, a abertura ocorre em nova aba. Para
+             * DOC/DOCX/XLS/XLSX/PPT/PPTX, o comportamento
+             * depende do navegador (eles normalmente são
+             * baixados pelo Chrome, pois ele não possui um
+             * visualizador nativo desses formatos).
+             */
             const openBtn =
               document.createElement(
-                "button"
+                "a"
               );
-
-            openBtn.type =
-              "button";
 
             openBtn.className =
               "document-attachment-open";
 
+            openBtn.href =
+              url;
+
+            openBtn.target =
+              "_blank";
+
+            openBtn.rel =
+              "noopener noreferrer";
+
             openBtn.textContent =
               "Abrir";
 
-            openBtn.onclick =
-              () =>
-                window.open(
-                  url,
-                  "_blank",
-                  "noopener,noreferrer"
-                );
+            openBtn.style.cursor = "pointer";
+            openBtn.style.textDecoration = "none";
 
             const downloadBtn =
               document.createElement(
