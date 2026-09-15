@@ -145,7 +145,6 @@ let sessionReady = false;
 let keysReady = false;
 let messagesReady = false;
 let statusReady = false;
-let startingSession = false;
 
 let sessionInitPromise = null;
 let sessionInitResolve = null;
@@ -1263,8 +1262,16 @@ function enterPanic() {
           </div>
         </div>
         <div class="news-top-actions">
-          <span>⌕</span>
-          <span>☰</span>
+          <span class="news-search-icon" aria-hidden="true">⌕</span>
+          <button
+            id="panicMenuButton"
+            class="news-menu-button"
+            type="button"
+            aria-label="Abrir menu"
+            title="Menu"
+          >
+            ☰
+          </button>
         </div>
       </div>
 
@@ -1305,27 +1312,126 @@ function enterPanic() {
         </article>
       </main>
 
-      <button id="panicUnlock" class="news-secret" aria-label="Abrir acesso privado">●</button>
       <textarea id="panicText" aria-hidden="true" tabindex="-1"></textarea>
     `;
 
     screen.dataset.newsBuilt = "1";
 
-    $("panicUnlock").onclick = () => {
-      const code = prompt("Código de saída");
+    /*
+     * O botão de menu do próprio aplicativo de notícias
+     * é a porta discreta para retornar ao chat privado.
+     * Primeiro tenta biometria, se configurada; caso
+     * contrário, usa o PIN do dispositivo. O antigo código
+     * específico do modo notícias permanece como fallback.
+     */
+    $("panicMenuButton").onclick =
+      authenticatePanicExit;
+  }
+}
 
-      if (code === localStorage.getItem("ep_panic_code") && code) {
+
+async function authenticatePanicExit() {
+
+  /*
+   * Se a biometria estiver cadastrada, ela é o primeiro
+   * método de autenticação para sair do disfarce.
+   */
+  if (
+    localStorage.getItem("ep_biometric_cred") &&
+    window.PublicKeyCredential &&
+    navigator.credentials
+  ) {
+
+    try {
+
+      const id =
+        localStorage.getItem("ep_biometric_cred");
+
+      const credential =
+        await navigator.credentials.get({
+          publicKey: {
+            challenge:
+              crypto.getRandomValues(
+                new Uint8Array(32)
+              ),
+
+            rpId:
+              location.hostname,
+
+            allowCredentials: [
+              {
+                type: "public-key",
+                id: fromBase64url(id)
+              }
+            ],
+
+            userVerification: "required",
+            timeout: 60000
+          }
+        });
+
+      if (credential) {
         leavePanic();
-      } else if (!localStorage.getItem("ep_panic_code")) {
-        const n = prompt("Crie um código curto para sair do modo notícias");
-        if (n) {
-          localStorage.setItem("ep_panic_code", n);
-          leavePanic();
-        }
-      } else {
-        showToast("Código incorreto.");
+        return;
       }
-    };
+
+    } catch (e) {
+
+      console.warn("Biometria para sair do disfarce:", e);
+
+      if (e?.name === "NotAllowedError") {
+        showToast("Biometria cancelada. Use o PIN para sair.");
+      }
+    }
+  }
+
+  /*
+   * Segundo método: PIN de 6 dígitos deste dispositivo.
+   */
+  if (pinReady) {
+
+    const code =
+      prompt("Digite o PIN para voltar ao chat");
+
+    if (code && await checkPin(code)) {
+      leavePanic();
+      return;
+    }
+
+    if (code) {
+      showToast("PIN incorreto.");
+    }
+
+    return;
+  }
+
+  /*
+   * Compatibilidade com instalações que ainda usam o
+   * código específico do modo notícias.
+   */
+  const panicCode =
+    localStorage.getItem("ep_panic_code");
+
+  if (panicCode) {
+
+    const code =
+      prompt("Código de saída");
+
+    if (code === panicCode) {
+      leavePanic();
+    } else {
+      showToast("Código incorreto.");
+    }
+
+    return;
+  }
+
+  const newCode =
+    prompt("Crie um código curto para sair do modo notícias");
+
+  if (newCode) {
+    localStorage.setItem("ep_panic_code", newCode);
+    leavePanic();
   }
 }
 
