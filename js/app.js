@@ -1298,6 +1298,87 @@ if ($("panicUnlock")) {
 }
 
 /* =========================================================
+   UTILITÁRIOS DE ANEXOS
+========================================================= */
+
+function getAttachmentIcon(
+  fileName,
+  mediaType
+) {
+
+  const ext =
+    (fileName || "")
+      .split(".")
+      .pop()
+      .toLowerCase();
+
+  if (
+    mediaType === "application/pdf" ||
+    ext === "pdf"
+  ) return "📕";
+
+  if (
+    ext === "doc" ||
+    ext === "docx" ||
+    mediaType.includes("word")
+  ) return "📘";
+
+  if (
+    ext === "xls" ||
+    ext === "xlsx" ||
+    mediaType.includes("sheet")
+  ) return "📗";
+
+  if (
+    ext === "ppt" ||
+    ext === "pptx" ||
+    mediaType.includes("presentation")
+  ) return "📙";
+
+  if (
+    ext === "txt" ||
+    mediaType.startsWith("text/")
+  ) return "📄";
+
+  if (
+    ext === "zip" ||
+    ext === "rar" ||
+    ext === "7z"
+  ) return "🗜️";
+
+  return "📎";
+}
+
+
+function formatAttachmentType(
+  fileName,
+  mediaType
+) {
+
+  const ext =
+    (fileName || "")
+      .split(".")
+      .pop()
+      .toUpperCase();
+
+  if (
+    ext &&
+    ext !== fileName.toUpperCase()
+  ) {
+    return ext;
+  }
+
+  if (
+    mediaType === "application/pdf"
+  ) {
+    return "PDF";
+  }
+
+  return mediaType || "Arquivo";
+}
+
+
+/* =========================================================
    RENDERIZAÇÃO DAS MENSAGENS
 ========================================================= */
 
@@ -1479,10 +1560,57 @@ async function renderMessages() {
               blob
             );
 
+          const mediaType =
+            d.media.type ||
+            "application/octet-stream";
+
+          const fileName =
+            d.media.name ||
+            "Anexo";
+
           let el;
 
+          /*
+           * IMAGENS
+           *
+           * Somente imagens são renderizadas
+           * com <img>. Antes, qualquer arquivo
+           * que não fosse áudio caía neste bloco,
+           * fazendo PDF, DOCX, XLSX etc. aparecerem
+           * como uma imagem quebrada.
+           */
           if (
-            d.media.type?.startsWith(
+            mediaType.startsWith(
+              "image/"
+            )
+          ) {
+
+            el =
+              document.createElement(
+                "img"
+              );
+
+            el.className =
+              "media";
+
+            el.alt =
+              fileName;
+
+            el.src = url;
+
+            el.loading =
+              "lazy";
+
+            el.onclick =
+              () =>
+                window.open(
+                  url,
+                  "_blank",
+                  "noopener,noreferrer"
+                );
+
+          } else if (
+            mediaType.startsWith(
               "audio/"
             )
           ) {
@@ -1494,30 +1622,159 @@ async function renderMessages() {
 
             el.controls = true;
 
+            el.preload =
+              "metadata";
+
             el.src = url;
 
-          } else {
+          } else if (
+            mediaType.startsWith(
+              "video/"
+            )
+          ) {
 
             el =
               document.createElement(
-                "img"
+                "video"
               );
 
             el.className =
               "media";
 
-            el.alt =
-              "Imagem";
+            el.controls = true;
+
+            el.preload =
+              "metadata";
 
             el.src = url;
 
-            el.onclick =
+          } else {
+
+            /*
+             * DOCUMENTOS E OUTROS ARQUIVOS
+             *
+             * PDF, DOC/DOCX, XLS/XLSX, PPT/PPTX,
+             * TXT, ZIP e demais tipos não são
+             * convertidos em imagem. Criamos um
+             * cartão com nome, tipo, Abrir e Baixar.
+             */
+            const attachment =
+              document.createElement(
+                "div"
+              );
+
+            attachment.className =
+              "document-attachment";
+
+            const icon =
+              document.createElement(
+                "div"
+              );
+
+            icon.className =
+              "document-attachment-icon";
+
+            icon.textContent =
+              getAttachmentIcon(
+                fileName,
+                mediaType
+              );
+
+            const info =
+              document.createElement(
+                "div"
+              );
+
+            info.className =
+              "document-attachment-info";
+
+            const name =
+              document.createElement(
+                "div"
+              );
+
+            name.className =
+              "document-attachment-name";
+
+            name.textContent =
+              fileName;
+
+            name.title =
+              fileName;
+
+            const type =
+              document.createElement(
+                "div"
+              );
+
+            type.className =
+              "document-attachment-type";
+
+            type.textContent =
+              formatAttachmentType(
+                fileName,
+                mediaType
+              );
+
+            info.appendChild(name);
+            info.appendChild(type);
+
+            const actions =
+              document.createElement(
+                "div"
+              );
+
+            actions.className =
+              "document-attachment-actions";
+
+            const openBtn =
+              document.createElement(
+                "button"
+              );
+
+            openBtn.type =
+              "button";
+
+            openBtn.className =
+              "document-attachment-open";
+
+            openBtn.textContent =
+              "Abrir";
+
+            openBtn.onclick =
               () =>
                 window.open(
                   url,
                   "_blank",
                   "noopener,noreferrer"
                 );
+
+            const downloadBtn =
+              document.createElement(
+                "a"
+              );
+
+            downloadBtn.className =
+              "document-attachment-download";
+
+            downloadBtn.href =
+              url;
+
+            downloadBtn.download =
+              fileName;
+
+            downloadBtn.textContent =
+              "Baixar";
+
+            actions.appendChild(openBtn);
+            actions.appendChild(downloadBtn);
+
+            attachment.appendChild(icon);
+            attachment.appendChild(info);
+            attachment.appendChild(actions);
+
+            el =
+              attachment;
           }
 
 
