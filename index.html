@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0b3d35">
-  <meta name="description" content="Comunicador privado de duas pessoas.">
+  <meta name="description" content="Notícias e informações em tempo real.">
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://www.gstatic.com https://*.firebasedatabase.app https://firebasestorage.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com; script-src 'self' https://www.gstatic.com; style-src 'self'; img-src 'self' blob: data: https://firebasestorage.googleapis.com; media-src 'self' blob: https://firebasestorage.googleapis.com; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self';">
 
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
 
-  <title>Notas</title>
+  <title>Notícias Agora</title>
 
   <link rel="stylesheet" href="./css/app.css?v=3">
 </head>
@@ -23,59 +23,35 @@
   <!-- =========================
        AUTENTICAÇÃO
        ========================= -->
-  <section class="screen" id="authScreen">
+  <section class="screen device-gate" id="authScreen">
 
-    <div class="card">
+    <div class="device-gate-card">
 
-      <div class="brand">Em Pauta</div>
-      <div class="sub">notas</div>
+      <div class="news-mini-logo">
+        <span class="news-mini-mark">N</span>
+        <div>
+          <strong>Notícias Agora</strong>
+          <small>informação em tempo real</small>
+        </div>
+      </div>
 
-      <form id="authForm">
+      <div class="device-gate-status" id="authStatus">
+        Preparando este dispositivo…
+      </div>
 
-        <input
-          class="field"
-          id="email"
-          type="email"
-          autocomplete="username"
-          placeholder="E-mail"
-          required
-        >
-
-        <input
-          class="field"
-          id="password"
-          type="password"
-          autocomplete="current-password"
-          placeholder="Senha"
-          required
-        >
-
-        <input
-          class="field"
-          id="nickname"
-          type="text"
-          maxlength="40"
-          placeholder="Nome/apelido deste dispositivo"
-          required
-        >
-
-        <button class="primary" type="submit">
-          Entrar
-        </button>
-
-        <div class="error" id="authError"></div>
-
-      </form>
-
-      <p class="tiny">
-        O acesso usa a conta deste dispositivo.
-        O conteúdo da conversa é cifrado no navegador antes de ser enviado ao Firebase.
+      <p class="device-gate-text">
+        Este dispositivo precisa estar previamente autorizado para acessar o conteúdo privado.
       </p>
+
+      <div class="device-gate-hint">
+        Depois da ativação, o acesso será protegido por biometria ou senha deste dispositivo.
+      </div>
+
+      <div class="error" id="authError"></div>
 
     </div>
 
   </section>
-
 
   <!-- =========================
        CABEÇALHO
@@ -380,7 +356,7 @@
           class="primary"
           id="logoutBtn"
         >
-          Sair deste dispositivo
+          Bloquear dispositivo
         </button>
 
       </div>
