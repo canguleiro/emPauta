@@ -1758,3 +1758,132 @@ header .actions{
   .news-app-top{padding-top:12px;}
   .news-feed{padding-left:22px;padding-right:22px;}
 }
+
+/* =========================================================
+   MODO NOTÍCIAS — V6
+========================================================= */
+
+.news-search-button{
+  display:grid;
+  place-items:center;
+  width:36px;
+  height:36px;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:#465157;
+  font:inherit;
+  font-size:22px;
+  cursor:pointer;
+  border-radius:10px;
+}
+
+.news-search-button:hover{
+  background:#f3f6f5;
+}
+
+.news-categories button{
+  flex:0 0 auto;
+  border:0;
+  padding:0;
+  background:transparent;
+  color:inherit;
+  font:inherit;
+  cursor:pointer;
+}
+
+.news-categories button.active{
+  color:#173d34;
+  position:relative;
+}
+
+.news-lead{
+  overflow:hidden;
+  padding:0;
+}
+
+.news-lead-image{
+  display:block;
+  width:100%;
+  height:150px;
+  object-fit:cover;
+}
+
+.news-lead-body{
+  padding:17px 18px 18px;
+}
+
+.news-lead h1{
+  font-size:21px;
+}
+
+.news-meta{
+  display:flex;
+  gap:6px;
+  align-items:center;
+  color:#8a9499;
+  font-size:10px;
+}
+
+.news-section-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin:20px 2px 0;
+  color:#263238;
+}
+
+.news-section-head strong{
+  font-size:15px;
+}
+
+.news-section-head span{
+  color:#8a9499;
+  font-size:10px;
+}
+
+.news-item{
+  align-items:stretch;
+  gap:12px;
+  min-height:82px;
+}
+
+.news-item-body{
+  min-width:0;
+  flex:1;
+}
+
+.news-thumb-image{
+  order:2;
+  flex:0 0 88px;
+  width:88px;
+  height:68px;
+  object-fit:cover;
+  border-radius:10px;
+  background:#dde4e6;
+}
+
+.news-item h2{
+  margin-top:4px;
+  margin-bottom:7px;
+  font-size:14px;
+}
+
+.news-more{
+  margin:18px 0 8px;
+  padding:14px 0 4px;
+  border-top:1px solid #e1e5e7;
+  text-align:center;
+  color:#8a9499;
+  font-size:10px;
+}
+
+.news-filter-hidden{
+  display:none !important;
+}
+
+@media(max-width:430px){
+  .news-lead-image{height:135px;}
+  .news-thumb-image{flex-basis:82px;width:82px;height:64px;}
+  .news-item h2{font-size:13.5px;}
+}
