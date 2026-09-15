@@ -2,7 +2,7 @@
       initializeApp
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 
-    /* V10 — modo disfarce automático somente no mobile; desktop abre direto no chat. */
+    /* V16 — CrIArt como modo disfarce automático somente no mobile; desktop abre direto no chat. */
 
     import {
       getAuth,
@@ -1379,19 +1379,27 @@
               <div class="ai-brand">
                 <span class="ai-brand-mark">✦</span>
                 <div class="ai-brand-copy">
-                  <strong>Assistente</strong>
-                  <small>Seu espaço de ideias</small>
+                  <strong>CrIArt</strong>
+                  <small>Assistente de ideias</small>
                 </div>
               </div>
 
               <div class="ai-top-actions">
                 <button
-                  id="aiNewChatTop"
+                  id="aiChatModeTop"
                   class="ai-icon-button"
                   type="button"
-                  title="Nova conversa"
-                  aria-label="Nova conversa"
+                  title="Abrir chat privado"
+                  aria-label="Abrir chat privado"
                 >＋</button>
+
+                <button
+                  id="aiDeleteChatTop"
+                  class="ai-icon-button ai-delete-chat-button"
+                  type="button"
+                  title="Excluir conversa atual"
+                  aria-label="Excluir conversa atual"
+                >⌫</button>
 
                 <button
                   id="panicMenuButton"
@@ -1610,49 +1618,97 @@
             .slice(0, 12)
             .forEach(chat => {
 
+              const row =
+                document.createElement("div");
+
+              row.className =
+                "ai-history-row" +
+                (chat.id === activeId ? " active" : "");
+
               const button =
-                document.createElement(
-                  "button"
-                );
+                document.createElement("button");
 
-              button.type =
-                "button";
-
-              button.className =
-                "ai-history-item" +
-                (
-                  chat.id === activeId
-                    ? " active"
-                    : ""
-                );
-
+              button.type = "button";
+              button.className = "ai-history-item";
               button.textContent =
-                chat.title ||
-                "Nova conversa";
-
+                chat.title || "Nova conversa";
               button.title =
-                chat.title ||
-                "Nova conversa";
+                chat.title || "Nova conversa";
 
-              button.onclick =
-                () => {
+              button.onclick = () => {
 
-                  activeId =
-                    chat.id;
+                activeId = chat.id;
+                saveChats();
+                renderHistory();
+                renderConversation();
+              };
 
-                  saveChats();
+              const remove =
+                document.createElement("button");
 
-                  renderHistory();
+              remove.type = "button";
+              remove.className = "ai-history-delete";
+              remove.title = "Excluir conversa";
+              remove.setAttribute("aria-label", "Excluir conversa");
+              remove.textContent = "×";
 
-                  renderConversation();
-                };
+              remove.onclick = event => {
 
-              history.appendChild(
-                button
-              );
+                event.preventDefault();
+                event.stopPropagation();
+                deleteChat(chat.id);
+              };
+
+              row.appendChild(button);
+              row.appendChild(remove);
+              history.appendChild(row);
             });
         }
 
+
+        function deleteChat(chatId) {
+
+          const index =
+            chats.findIndex(chat => chat.id === chatId);
+
+          if (index < 0) return;
+
+          const chat = chats[index];
+
+          const label =
+            chat.title || "Nova conversa";
+
+          if (!window.confirm(`Excluir "${label}"?`)) {
+            return;
+          }
+
+          chats.splice(index, 1);
+
+          if (activeId === chatId) {
+            activeId = chats[0]?.id || null;
+          }
+
+          saveChats();
+
+          if (!chats.length) {
+            createChat();
+            return;
+          }
+
+          renderHistory();
+          renderConversation();
+          showToast("Conversa excluída.");
+        }
+
+
+        function deleteActiveChat() {
+
+          const chat = getActiveChat();
+
+          if (!chat) return;
+
+          deleteChat(chat.id);
+        }
 
         function renderConversation() {
 
@@ -2219,10 +2275,16 @@
             startNewChat
           );
 
-        $("aiNewChatTop")
+        $("aiChatModeTop")
           ?.addEventListener(
             "click",
-            startNewChat
+            authenticatePanicExit
+          );
+
+        $("aiDeleteChatTop")
+          ?.addEventListener(
+            "click",
+            deleteActiveChat
           );
 
 
@@ -2269,8 +2331,9 @@
 
 
         /*
-         * O menu superior continua sendo a porta discreta
-         * para retornar ao chat privado.
+         * Os controles superiores podem abrir o chat privado.
+         * O botão + foi reservado para essa troca de modo;
+         * a lixeira exclui a conversa atual.
          */
         $("panicMenuButton").onclick =
           authenticatePanicExit;
@@ -2312,8 +2375,8 @@
 
 
       /*
-       * O botão de menu precisa continuar funcionando também
-       * quando o modo já tiver sido construído anteriormente.
+       * Os controles superiores precisam continuar funcionando
+       * também quando o modo já tiver sido construído anteriormente.
        */
       const menu =
         $("panicMenuButton");
@@ -2321,6 +2384,22 @@
       if (menu) {
         menu.onclick =
           authenticatePanicExit;
+      }
+
+      const chatMode =
+        $("aiChatModeTop");
+
+      if (chatMode) {
+        chatMode.onclick =
+          authenticatePanicExit;
+      }
+
+      const deleteTop =
+        $("aiDeleteChatTop");
+
+      if (deleteTop) {
+        deleteTop.onclick =
+          deleteActiveChat;
       }
 
 
@@ -6057,6 +6136,48 @@
      * autorizado. Isso evita criar um falso mecanismo de login
      * local que não teria como autenticar no Firebase.
      */
+
+    /* =========================================================
+       TELA INICIAL — CrIArt
+       Mantém a tela de autorização existente, mas substitui
+       a identidade visual antiga pela marca do aplicativo de IA.
+    ========================================================= */
+
+    function prepareCrIArtGate() {
+
+      const screen = $("authScreen");
+      const card = screen?.querySelector(".device-gate-card");
+
+      if (!card) return;
+
+      const oldBrand =
+        card.querySelector(".news-mini-logo");
+
+      if (oldBrand) {
+        oldBrand.remove();
+      }
+
+      if (!card.querySelector(".criart-gate-brand")) {
+
+        const brand = document.createElement("div");
+
+        brand.className = "criart-gate-brand";
+
+        brand.innerHTML = `
+          <div class="criart-gate-mark" aria-hidden="true">✦</div>
+          <div class="criart-gate-copy">
+            <strong>CrIArt</strong>
+            <span>Assistente de ideias</span>
+          </div>
+        `;
+
+        card.prepend(brand);
+      }
+    }
+
+
+    prepareCrIArtGate();
+
 
     function updateDeviceGate(message) {
 
