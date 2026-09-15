@@ -1586,9 +1586,50 @@ header .actions{
 
 .news-top-actions{
   display:flex;
-  gap:18px;
+  align-items:center;
+  gap:10px;
   color:#465157;
   font-size:22px;
+}
+
+.news-search-icon{
+  display:grid;
+  place-items:center;
+  width:36px;
+  height:36px;
+  color:#465157;
+  font-size:21px;
+}
+
+.news-menu-button{
+  display:grid;
+  place-items:center;
+  width:38px;
+  height:38px;
+  padding:0;
+  border:1px solid #e0e5e7;
+  border-radius:11px;
+  background:#fff;
+  color:#465157;
+  font:inherit;
+  font-size:21px;
+  line-height:1;
+  cursor:pointer;
+  transition:background .15s ease, border-color .15s ease, transform .15s ease;
+}
+
+.news-menu-button:hover{
+  background:#f3f6f5;
+  border-color:#d2dada;
+}
+
+.news-menu-button:active{
+  transform:scale(.96);
+}
+
+.news-menu-button:focus-visible{
+  outline:2px solid #173d34;
+  outline-offset:2px;
 }
 
 .news-categories{
