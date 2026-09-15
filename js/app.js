@@ -1841,6 +1841,37 @@ async function renderMessages() {
               "document-attachment-actions";
 
             /*
+             * Ações dos documentos
+             *
+             * Os dois botões usam o mesmo tratamento visual
+             * do botão "Baixar" das imagens, com espaçamento
+             * entre eles para evitar que fiquem colados.
+             */
+            actions.style.display = "flex";
+            actions.style.alignItems = "center";
+            actions.style.justifyContent = "flex-start";
+            actions.style.gap = "8px";
+            actions.style.marginTop = "8px";
+            actions.style.flexWrap = "wrap";
+
+            const styleDocumentAction = (button) => {
+              button.style.display = "inline-flex";
+              button.style.alignItems = "center";
+              button.style.justifyContent = "center";
+              button.style.padding = "5px 10px";
+              button.style.borderRadius = "8px";
+              button.style.background = "rgba(0,0,0,.08)";
+              button.style.color = "inherit";
+              button.style.textDecoration = "none";
+              button.style.fontSize = "12px";
+              button.style.fontWeight = "600";
+              button.style.lineHeight = "1.2";
+              button.style.cursor = "pointer";
+              button.style.border = "0";
+              button.style.boxSizing = "border-box";
+            };
+
+            /*
              * Usamos um <a target="_blank"> em vez de
              * window.open() disparado por JavaScript.
              * Isso é mais confiável para blob: URLs criadas
@@ -1873,8 +1904,7 @@ async function renderMessages() {
             openBtn.textContent =
               "Abrir";
 
-            openBtn.style.cursor = "pointer";
-            openBtn.style.textDecoration = "none";
+            styleDocumentAction(openBtn);
 
             const downloadBtn =
               document.createElement(
@@ -1892,6 +1922,8 @@ async function renderMessages() {
 
             downloadBtn.textContent =
               "Baixar";
+
+            styleDocumentAction(downloadBtn);
 
             actions.appendChild(openBtn);
             actions.appendChild(downloadBtn);
