@@ -2132,3 +2132,191 @@ header .actions{
     scroll-behavior:auto!important;
   }
 }
+
+
+/* =========================================================
+   CrIArt — TELA INICIAL / IDENTIDADE VISUAL
+   Mantém a estrutura de autorização e apenas moderniza
+   a apresentação para o aplicativo de IA.
+========================================================= */
+
+.device-gate-card{
+  width:min(100%,380px);
+  padding:30px 28px;
+  border-radius:24px;
+  background:rgba(255,255,255,.98);
+  color:var(--ink);
+  box-shadow:0 20px 60px #0004;
+}
+
+.criart-gate-brand{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-bottom:26px;
+}
+
+.criart-gate-mark{
+  width:46px;
+  height:46px;
+  flex:0 0 46px;
+  display:grid;
+  place-items:center;
+  border-radius:14px;
+  background:var(--green);
+  color:#fff;
+  font-size:23px;
+  font-weight:800;
+  box-shadow:0 8px 20px #0b3d3533;
+}
+
+.criart-gate-copy{
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+}
+
+.criart-gate-copy strong{
+  font-size:25px;
+  line-height:1;
+  letter-spacing:-.04em;
+  color:var(--ink);
+}
+
+.criart-gate-copy span{
+  margin-top:5px;
+  font-size:10px;
+  letter-spacing:.05em;
+  color:#7c8581;
+}
+
+.device-gate-status{
+  margin-top:4px;
+  font-size:14px;
+  font-weight:750;
+  line-height:1.35;
+}
+
+.device-gate-text{
+  margin:10px 0 0;
+  color:#66706c;
+  font-size:12px;
+  line-height:1.55;
+}
+
+.device-gate-hint{
+  margin-top:12px;
+  padding:11px 12px;
+  border-radius:12px;
+  background:#eef3f1;
+  color:#66706c;
+  font-size:10px;
+  line-height:1.5;
+}
+
+
+/* =========================================================
+   CrIArt — HISTÓRICO COM EXCLUSÃO
+========================================================= */
+
+#panicScreen .ai-history-row{
+  display:flex;
+  align-items:center;
+  gap:3px;
+  width:100%;
+  margin:1px 0;
+  padding:0;
+  border-radius:8px;
+}
+
+#panicScreen .ai-history-row.active,
+#panicScreen .ai-history-row:hover{
+  background:#dfe6e3;
+}
+
+#panicScreen .ai-history-row .ai-history-item{
+  flex:1;
+  width:auto;
+  min-width:0;
+  margin:0;
+  background:transparent;
+}
+
+#panicScreen .ai-history-row.active .ai-history-item,
+#panicScreen .ai-history-row:hover .ai-history-item{
+  background:transparent;
+}
+
+#panicScreen .ai-history-delete{
+  width:28px;
+  height:30px;
+  flex:0 0 28px;
+  display:grid;
+  place-items:center;
+  border:0;
+  border-radius:7px;
+  background:transparent;
+  color:#7d8884;
+  font-size:17px;
+  line-height:1;
+  cursor:pointer;
+  opacity:.55;
+}
+
+#panicScreen .ai-history-delete:hover{
+  background:#f6deda;
+  color:#a52b20;
+  opacity:1;
+}
+
+#panicScreen .ai-delete-chat-button{
+  font-size:18px;
+  opacity:.82;
+}
+
+#panicScreen .ai-delete-chat-button:hover{
+  background:rgba(255,255,255,.12);
+}
+
+
+/* =========================================================
+   CrIArt — MOBILE
+========================================================= */
+
+@media(max-width:650px){
+
+  .device-gate-card{
+    width:min(100%,360px);
+    padding:26px 22px;
+    border-radius:22px;
+  }
+
+  .criart-gate-brand{
+    margin-bottom:22px;
+  }
+
+  .criart-gate-mark{
+    width:42px;
+    height:42px;
+    flex-basis:42px;
+    border-radius:13px;
+    font-size:21px;
+  }
+
+  .criart-gate-copy strong{
+    font-size:23px;
+  }
+
+  #panicScreen .ai-top-actions{
+    gap:2px;
+  }
+
+  #panicScreen .ai-icon-button{
+    width:35px;
+    height:35px;
+  }
+
+  #panicScreen .ai-delete-chat-button{
+    font-size:17px;
+  }
+}
