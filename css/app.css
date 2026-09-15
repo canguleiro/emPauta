@@ -1887,3 +1887,29 @@ header .actions{
   .news-thumb-image{flex-basis:82px;width:82px;height:64px;}
   .news-item h2{font-size:13.5px;}
 }
+
+
+/* =========================================================
+   DISFARCE — AJUSTES V7
+========================================================= */
+.news-lead-image,
+.news-thumb-image{
+  background:#dde6e1;
+}
+
+.news-lead-image{
+  object-position:center;
+}
+
+.news-thumb-image{
+  display:block;
+  flex-shrink:0;
+}
+
+.news-thumb-image[src^="data:image/svg+xml"]{
+  object-fit:cover;
+}
+
+.news-menu-button{
+  -webkit-tap-highlight-color:transparent;
+}
