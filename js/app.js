@@ -2406,6 +2406,9 @@
       m
     ) {
 
+      /*
+       * Fecha qualquer menu de mensagem já aberto.
+       */
       document
         .querySelectorAll(
           ".menu"
@@ -2425,6 +2428,42 @@
 
 
       /*
+       * IMPORTANTE:
+       *
+       * O menu não fica mais dentro do balão da mensagem.
+       * Ele é colocado diretamente no <body> e usa position:fixed.
+       *
+       * Isso evita que:
+       *
+       * 1. o menu seja cortado pelo limite do balão;
+       * 2. o menu seja cortado pelo overflow da área de conversa;
+       * 3. o menu desapareça quando a mensagem estiver muito
+       *    próxima da borda inferior ou lateral da tela.
+       *
+       * Depois de renderizado, calculamos a melhor posição:
+       * - abaixo da mensagem quando houver espaço;
+       * - acima quando a mensagem estiver perto do rodapé;
+       * - sempre dentro dos limites da janela.
+       */
+
+
+      menu.style.position =
+        "fixed";
+
+      menu.style.zIndex =
+        "99999";
+
+      menu.style.maxHeight =
+        "calc(100vh - 16px)";
+
+      menu.style.overflowY =
+        "auto";
+
+      menu.style.boxSizing =
+        "border-box";
+
+
+      /*
        * Adiciona uma ação comum ao menu.
        */
       const add =
@@ -2434,6 +2473,9 @@
             document.createElement(
               "button"
             );
+
+          b.type =
+            "button";
 
           b.textContent =
             label;
@@ -2455,10 +2497,7 @@
       /*
        * Reações rápidas.
        *
-       * Em vez de usar os mesmos botões verticais das ações
-       * do menu, as reações ficam em uma faixa própria.
-       * Assim os emojis aparecem lado a lado e quebram
-       * automaticamente para a linha seguinte em telas menores.
+       * Elas continuam lado a lado, como no ajuste anterior.
        */
       const reactionRow =
         document.createElement(
@@ -2611,7 +2650,6 @@
       /*
        * Só o remetente pode editar.
        */
-
       if (
         m.data.senderUid === me.uid
       ) {
@@ -2636,7 +2674,6 @@
       /*
        * Só o remetente pode apagar.
        */
-
       if (
         m.data.senderUid === me.uid
       ) {
@@ -2649,8 +2686,192 @@
       }
 
 
-      bubble.appendChild(
+      /*
+       * Coloca o menu no body, fora do balão e fora
+       * da área com overflow da conversa.
+       */
+      document.body.appendChild(
         menu
+      );
+
+
+      /*
+       * Calcula a posição depois de o navegador
+       * conhecer as dimensões reais do menu.
+       */
+      const bubbleRect =
+        bubble.getBoundingClientRect();
+
+      const menuRect =
+        menu.getBoundingClientRect();
+
+      const viewportWidth =
+        document.documentElement.clientWidth ||
+        window.innerWidth;
+
+      const viewportHeight =
+        document.documentElement.clientHeight ||
+        window.innerHeight;
+
+      const margin =
+        8;
+
+      const gap =
+        6;
+
+
+      /*
+       * Horizontal:
+       *
+       * Mensagem enviada:
+       * alinha a borda direita do menu com a mensagem.
+       *
+       * Mensagem recebida:
+       * alinha a borda esquerda do menu com a mensagem.
+       *
+       * Depois fazemos clamp para impedir que ele
+       * ultrapasse a tela em celulares estreitos.
+       */
+      let left =
+        m.data.senderUid === me.uid
+          ? bubbleRect.right - menuRect.width
+          : bubbleRect.left;
+
+      left =
+        Math.max(
+          margin,
+          Math.min(
+            left,
+            viewportWidth -
+              menuRect.width -
+              margin
+          )
+        );
+
+
+      /*
+       * Vertical:
+       *
+       * Primeiro tentamos abrir abaixo.
+       * Se não houver espaço suficiente, abrimos acima.
+       * Se a mensagem estiver em uma região muito apertada,
+       * limitamos a altura e mantemos o menu dentro da tela.
+       */
+      const spaceBelow =
+        viewportHeight -
+        bubbleRect.bottom -
+        margin;
+
+      const spaceAbove =
+        bubbleRect.top -
+        margin;
+
+      let top;
+
+      if (
+        spaceBelow >=
+        menuRect.height +
+        gap
+      ) {
+
+        top =
+          bubbleRect.bottom +
+          gap;
+
+      } else if (
+        spaceAbove >=
+        menuRect.height +
+        gap
+      ) {
+
+        top =
+          bubbleRect.top -
+          menuRect.height -
+          gap;
+
+      } else if (
+        spaceBelow >=
+        spaceAbove
+      ) {
+
+        /*
+         * Pouco espaço nos dois lados.
+         * Fica abaixo, mas limitado ao viewport.
+         */
+        top =
+          Math.min(
+            bubbleRect.bottom + gap,
+            viewportHeight -
+              menuRect.height -
+              margin
+          );
+
+      } else {
+
+        /*
+         * Fica acima, também limitado ao viewport.
+         */
+        top =
+          Math.max(
+            margin,
+            bubbleRect.top -
+              menuRect.height -
+              gap
+          );
+      }
+
+
+      top =
+        Math.max(
+          margin,
+          Math.min(
+            top,
+            viewportHeight -
+              menuRect.height -
+              margin
+          )
+        );
+
+
+      menu.style.left =
+        `${Math.round(left)}px`;
+
+      menu.style.top =
+        `${Math.round(top)}px`;
+
+
+      /*
+       * Se o usuário rolar a conversa ou redimensionar
+       * a janela enquanto o menu estiver aberto, fechamos
+       * o menu. Isso evita que ele fique "solto" em relação
+       * à mensagem original.
+       */
+      const closeOnViewportChange =
+        () => {
+
+          menu.remove();
+
+          window.removeEventListener(
+            "scroll",
+            closeOnViewportChange,
+            true
+          );
+
+          window.removeEventListener(
+            "resize",
+            closeOnViewportChange
+          );
+        };
+
+      window.addEventListener(
+        "scroll",
+        closeOnViewportChange,
+        true
+      );
+
+      window.addEventListener(
+        "resize",
+        closeOnViewportChange
       );
     }
 
