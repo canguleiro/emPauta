@@ -145,6 +145,7 @@ let sessionReady = false;
 let keysReady = false;
 let messagesReady = false;
 let statusReady = false;
+let startingSession = false;
 
 let sessionInitPromise = null;
 let sessionInitResolve = null;
