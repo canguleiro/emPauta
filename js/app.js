@@ -1241,6 +1241,67 @@ if ($("biometricBtn")) {
    MODO DISFARCE / PÂNICO
 ========================================================= */
 
+/*
+ * Saída segura do modo disfarce.
+ * O botão de menu NÃO depende de uma função externa.
+ * Se houver biometria cadastrada, solicita WebAuthn.
+ * Caso contrário, abre o PIN do dispositivo.
+ */
+async function authenticatePanicExit() {
+
+  const biometricId = localStorage.getItem("ep_biometric_cred");
+
+  if (biometricId && window.PublicKeyCredential && navigator.credentials) {
+
+    try {
+
+      const credential = await navigator.credentials.get({
+        publicKey: {
+          challenge: crypto.getRandomValues(new Uint8Array(32)),
+          rpId: location.hostname,
+          allowCredentials: [{
+            type: "public-key",
+            id: fromBase64url(biometricId)
+          }],
+          userVerification: "required",
+          timeout: 60000
+        }
+      });
+
+      if (credential) {
+        leavePanic();
+        unlockApp();
+        showToast("Acesso autorizado.");
+      }
+
+      return;
+
+    } catch (e) {
+
+      console.warn("Saída biométrica do modo disfarce:", e);
+
+      /*
+       * Cancelamento/falha da biometria não revela o chat.
+       * O usuário pode continuar pelo PIN.
+       */
+      if (e?.name !== "NotAllowedError") {
+        showToast("Biometria indisponível. Use o PIN.");
+      }
+    }
+  }
+
+  /* Sem biometria ou após falha: mostra o PIN do dispositivo. */
+  leavePanic();
+
+  if (pinReady) {
+    lockApp();
+    showToast("Digite o PIN para voltar ao chat.");
+  } else {
+    unlockApp();
+  }
+}
+
+
 function enterPanic() {
 
   const screen = $("panicScreen");
@@ -1292,7 +1353,7 @@ function enterPanic() {
         <article class="news-lead news-story" data-news-category="Brasil">
           <img
             class="news-lead-image"
-            src="https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=900&q=80"
+            src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5MDAgNDIwIj48cmVjdCB3aWR0aD0iOTAwIiBoZWlnaHQ9IjQyMCIgZmlsbD0iI2U4ZWVlOSIvPjxyZWN0IHg9IjM4IiB5PSIzNSIgd2lkdGg9IjgyNCIgaGVpZ2h0PSIzNTAiIHJ4PSIyNCIgZmlsbD0iI2ZmZiIvPjxyZWN0IHg9Ijc2IiB5PSI3MiIgd2lkdGg9IjI3MCIgaGVpZ2h0PSIyMiIgcng9IjUiIGZpbGw9IiMxNzNkMzQiLz48cmVjdCB4PSI3NiIgeT0iMTE1IiB3aWR0aD0iNzQ4IiBoZWlnaHQ9IjkiIHJ4PSI0IiBmaWxsPSIjZDZkZGRhIi8+PHJlY3QgeD0iNzYiIHk9IjE0NSIgd2lkdGg9IjY5MCIgaGVpZ2h0PSI5IiByeD0iNCIgZmlsbD0iI2Q2ZGRkYSIvPjxyZWN0IHg9Ijc2IiB5PSIxOTAiIHdpZHRoPSI0NjAiIGhlaWdodD0iMTMwIiByeD0iMTIiIGZpbGw9IiNjYmQ4ZDEiLz48Y2lyY2xlIGN4PSI2NTAiIGN5PSIyNTQiIHI9IjYyIiBmaWxsPSIjMTczZDM0Ii8+PHBhdGggZD0iTTYyMCAyNTRoNjBNNjUwIDIyNHY2MCIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjEyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48L3N2Zz4="
             alt="Jornais e notícias"
             loading="eager"
           >
@@ -1316,7 +1377,7 @@ function enterPanic() {
         <div id="newsStories">
 
           <article class="news-item news-story" data-news-category="Brasil">
-            <img class="news-thumb-image" src="https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?auto=format&fit=crop&w=320&q=80" alt="Congresso e política" loading="lazy">
+            <img class="news-thumb-image" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMjAgMjIwIj48cmVjdCB3aWR0aD0iMzIwIiBoZWlnaHQ9IjIyMCIgZmlsbD0iI2RmZTllMiIvPjxyZWN0IHg9IjI4IiB5PSIzOCIgd2lkdGg9IjI2NCIgaGVpZ2h0PSIxNDUiIHJ4PSIxMiIgZmlsbD0iI2ZmZiIvPjxyZWN0IHg9IjUyIiB5PSI2MiIgd2lkdGg9IjIxNiIgaGVpZ2h0PSIxMiIgcng9IjQiIGZpbGw9IiMxNzNkMzQiLz48cGF0aCBkPSJNNjAgMTQzbDM0LTQyIDM1IDI5IDQyLTU2IDU3IDY5IiBmaWxsPSJub25lIiBzdHJva2U9IiNiMjRhMzIiIHN0cm9rZS13aWR0aD0iMTAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjxjaXJjbGUgY3g9IjIzMyIgY3k9Ijg1IiByPSIxNCIgZmlsbD0iIzE3M2QzNCIvPjwvc3ZnPg==" alt="Congresso e política" loading="lazy">
             <div class="news-item-body">
               <span class="news-kicker">BRASIL</span>
               <h2>Congresso retoma agenda com novas propostas em discussão</h2>
@@ -1325,7 +1386,7 @@ function enterPanic() {
           </article>
 
           <article class="news-item news-story" data-news-category="Tecnologia">
-            <img class="news-thumb-image" src="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=320&q=80" alt="Tecnologia e eletrônicos" loading="lazy">
+            <img class="news-thumb-image" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMjAgMjIwIj48cmVjdCB3aWR0aD0iMzIwIiBoZWlnaHQ9IjIyMCIgZmlsbD0iI2U2ZWNlZSIvPjxyZWN0IHg9IjU2IiB5PSIzNiIgd2lkdGg9IjIwOCIgaGVpZ2h0PSIxMjQiIHJ4PSIxMiIgZmlsbD0iIzI2MzIzOCIvPjxyZWN0IHg9IjcwIiB5PSI1MCIgd2lkdGg9IjE4MCIgaGVpZ2h0PSI5NiIgcng9IjciIGZpbGw9IiNkY2U3ZTIiLz48Y2lyY2xlIGN4PSIxMDQiIGN5PSI4MiIgcj0iMTgiIGZpbGw9IiMxNzNkMzQiLz48cmVjdCB4PSIxMzMiIHk9IjY4IiB3aWR0aD0iODgiIGhlaWdodD0iOSIgcng9IjQiIGZpbGw9IiMxNzNkMzQiLz48cmVjdCB4PSIxMzMiIHk9Ijg4IiB3aWR0aD0iNjYiIGhlaWdodD0iOCIgcng9IjQiIGZpbGw9IiM5YWE5YTMiLz48cGF0aCBkPSJNMTI1IDE2MHYyME0xOTUgMTYwdjIwTTk1IDE4MGgxMzAiIHN0cm9rZT0iIzI2MzIzOCIgc3Ryb2tlLXdpZHRoPSI5IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48L3N2Zz4=" alt="Tecnologia e eletrônicos" loading="lazy">
             <div class="news-item-body">
               <span class="news-kicker">TECNOLOGIA</span>
               <h2>Novas ferramentas digitais prometem facilitar tarefas do dia a dia</h2>
@@ -1334,7 +1395,7 @@ function enterPanic() {
           </article>
 
           <article class="news-item news-story" data-news-category="Mundo">
-            <img class="news-thumb-image" src="https://images.unsplash.com/photo-1521295121783-8a321d551ad2?auto=format&fit=crop&w=320&q=80" alt="Jornal internacional" loading="lazy">
+            <img class="news-thumb-image" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMjAgMjIwIj48cmVjdCB3aWR0aD0iMzIwIiBoZWlnaHQ9IjIyMCIgZmlsbD0iI2UyZTllZCIvPjxjaXJjbGUgY3g9IjE2MCIgY3k9IjExMCIgcj0iNzgiIGZpbGw9IiMxNzNkMzQiLz48cGF0aCBkPSJNOTIgOTFjMzAtMTggNTUtMjEgODItMTUgMjQgNSA0MyAyIDU0LThNOTQgMTMwYzM1IDEzIDYwIDkgODItMyAyNC0xMyAzOS0xMCA1MiAyTTE0NSAzNGMtMTIgMzItMTQgNTQtOSA3NiA2IDI4IDEgNDktMTIgNzJNMTkwIDM5YzkgMjkgOSA1Mi0yIDczLTEyIDI1LTkgNDggMyA3MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZGNlOGUxIiBzdHJva2Utd2lkdGg9IjgiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPg==" alt="Jornal internacional" loading="lazy">
             <div class="news-item-body">
               <span class="news-kicker">MUNDO</span>
               <h2>Mercados internacionais acompanham novos indicadores econômicos</h2>
@@ -1343,7 +1404,7 @@ function enterPanic() {
           </article>
 
           <article class="news-item news-story" data-news-category="Política">
-            <img class="news-thumb-image" src="https://images.unsplash.com/photo-1521295121783-8a321d551ad2?auto=format&fit=crop&w=320&q=80" alt="Notícias e política" loading="lazy">
+            <img class="news-thumb-image" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMjAgMjIwIj48cmVjdCB3aWR0aD0iMzIwIiBoZWlnaHQ9IjIyMCIgZmlsbD0iI2ViZThlNCIvPjxwYXRoIGQ9Ik00MiA4OGgyMzZMMTYwIDQ1eiIgZmlsbD0iIzE3M2QzNCIvPjxwYXRoIGQ9Ik01OCA5MXY3M00xMDEgOTF2NzNNMTQ1IDkxdjczTTE4OCA5MXY3M00yMzIgOTF2NzNNMjc0IDkxdjczIiBzdHJva2U9IiMxNzNkMzQiIHN0cm9rZS13aWR0aD0iMTUiLz48cmVjdCB4PSIzNiIgeT0iMTY0IiB3aWR0aD0iMjQ4IiBoZWlnaHQ9IjE2IiByeD0iNSIgZmlsbD0iI2IyNGEzMiIvPjwvc3ZnPg==" alt="Notícias e política" loading="lazy">
             <div class="news-item-body">
               <span class="news-kicker">POLÍTICA</span>
               <h2>Reuniões desta semana devem definir prioridades para os próximos dias</h2>
@@ -1352,7 +1413,7 @@ function enterPanic() {
           </article>
 
           <article class="news-item news-story" data-news-category="Brasil">
-            <img class="news-thumb-image" src="https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=320&q=80" alt="Noticiário impresso" loading="lazy">
+            <img class="news-thumb-image" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMjAgMjIwIj48cmVjdCB3aWR0aD0iMzIwIiBoZWlnaHQ9IjIyMCIgZmlsbD0iI2VmZWFlNCIvPjxyZWN0IHg9IjQyIiB5PSIyOCIgd2lkdGg9IjIzNiIgaGVpZ2h0PSIxNjQiIHJ4PSI4IiBmaWxsPSIjZmZmIi8+PHJlY3QgeD0iNjIiIHk9IjQ4IiB3aWR0aD0iMTE2IiBoZWlnaHQ9IjEyIiByeD0iNCIgZmlsbD0iIzE3M2QzNCIvPjxyZWN0IHg9IjYyIiB5PSI3NiIgd2lkdGg9IjE5NiIgaGVpZ2h0PSI3IiByeD0iMyIgZmlsbD0iI2FhYjViMCIvPjxyZWN0IHg9IjYyIiB5PSI5MiIgd2lkdGg9IjE4MCIgaGVpZ2h0PSI3IiByeD0iMyIgZmlsbD0iI2FhYjViMCIvPjxyZWN0IHg9IjYyIiB5PSIxMTciIHdpZHRoPSI4NCIgaGVpZ2h0PSI1NSIgcng9IjUiIGZpbGw9IiNkNWRmZGEiLz48cmVjdCB4PSIxNTgiIHk9IjExNyIgd2lkdGg9IjEwMCIgaGVpZ2h0PSI3IiByeD0iMyIgZmlsbD0iI2MyY2JjNyIvPjxyZWN0IHg9IjE1OCIgeT0iMTMzIiB3aWR0aD0iOTIiIGhlaWdodD0iNyIgcng9IjMiIGZpbGw9IiNjMmNiYzciLz48cmVjdCB4PSIxNTgiIHk9IjE0OSIgd2lkdGg9Ijc1IiBoZWlnaHQ9IjciIHJ4PSIzIiBmaWxsPSIjYzJjYmM3Ii8+PC9zdmc+" alt="Noticiário impresso" loading="lazy">
             <div class="news-item-body">
               <span class="news-kicker">BRASIL</span>
               <h2>Serviços e cidades anunciam mudanças para os próximos dias</h2>
@@ -1361,7 +1422,7 @@ function enterPanic() {
           </article>
 
           <article class="news-item news-story" data-news-category="Tecnologia">
-            <img class="news-thumb-image" src="https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=320&q=80" alt="Tecnologia e computador" loading="lazy">
+            <img class="news-thumb-image" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMjAgMjIwIj48cmVjdCB3aWR0aD0iMzIwIiBoZWlnaHQ9IjIyMCIgZmlsbD0iI2U0ZWNlOCIvPjxwYXRoIGQ9Ik0xNjAgMzVsNzggMjh2NTFjMCA0My0zMCA2NC03OCA3OC00OC0xNC03OC0zNS03OC03OFY2M3oiIGZpbGw9IiMxNzNkMzQiLz48cGF0aCBkPSJNMTI2IDExMWwyMyAyMyA0OC01NSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjEzIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48L3N2Zz4=" alt="Tecnologia e computador" loading="lazy">
             <div class="news-item-body">
               <span class="news-kicker">TECNOLOGIA</span>
               <h2>Atualização de aplicativos amplia recursos de segurança e privacidade</h2>
@@ -1370,7 +1431,7 @@ function enterPanic() {
           </article>
 
           <article class="news-item news-story" data-news-category="Mundo">
-            <img class="news-thumb-image" src="https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&w=320&q=80" alt="Paisagem internacional" loading="lazy">
+            <img class="news-thumb-image" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMjAgMjIwIj48cmVjdCB3aWR0aD0iMzIwIiBoZWlnaHQ9IjIyMCIgZmlsbD0iI2U3ZWNlZiIvPjxyZWN0IHk9IjE2OCIgd2lkdGg9IjMyMCIgaGVpZ2h0PSI1MiIgZmlsbD0iI2Q2ZGRkZiIvPjxyZWN0IHg9IjM4IiB5PSI3MiIgd2lkdGg9IjcwIiBoZWlnaHQ9Ijk2IiBmaWxsPSIjMTczZDM0Ii8+PHJlY3QgeD0iMTI2IiB5PSI0OCIgd2lkdGg9Ijc2IiBoZWlnaHQ9IjEyMCIgZmlsbD0iIzUzNjY1ZiIvPjxyZWN0IHg9IjIyMCIgeT0iODgiIHdpZHRoPSI2MCIgaGVpZ2h0PSI4MCIgZmlsbD0iI2IyNGEzMiIvPjxnIGZpbGw9IiNmZmYiPjxyZWN0IHg9IjUxIiB5PSI4NiIgd2lkdGg9IjE0IiBoZWlnaHQ9IjE0Ii8+PHJlY3QgeD0iODAiIHk9Ijg2IiB3aWR0aD0iMTQiIGhlaWdodD0iMTQiLz48cmVjdCB4PSI1MSIgeT0iMTEzIiB3aWR0aD0iMTQiIGhlaWdodD0iMTQiLz48cmVjdCB4PSI4MCIgeT0iMTEzIiB3aWR0aD0iMTQiIGhlaWdodD0iMTQiLz48cmVjdCB4PSIxNDMiIHk9IjY0IiB3aWR0aD0iMTUiIGhlaWdodD0iMTUiLz48cmVjdCB4PSIxNzQiIHk9IjY0IiB3aWR0aD0iMTUiIGhlaWdodD0iMTUiLz48cmVjdCB4PSIxNDMiIHk9IjkyIiB3aWR0aD0iMTUiIGhlaWdodD0iMTUiLz48cmVjdCB4PSIxNzQiIHk9IjkyIiB3aWR0aD0iMTUiIGhlaWdodD0iMTUiLz48L2c+PC9zdmc+" alt="Paisagem internacional" loading="lazy">
             <div class="news-item-body">
               <span class="news-kicker">MUNDO</span>
               <h2>Países anunciam novas iniciativas de cooperação internacional</h2>
@@ -1379,7 +1440,7 @@ function enterPanic() {
           </article>
 
           <article class="news-item news-story" data-news-category="Política">
-            <img class="news-thumb-image" src="https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?auto=format&fit=crop&w=320&q=80" alt="Edifício público" loading="lazy">
+            <img class="news-thumb-image" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMjAgMjIwIj48cmVjdCB3aWR0aD0iMzIwIiBoZWlnaHQ9IjIyMCIgZmlsbD0iI2U3ZWNlZiIvPjxyZWN0IHk9IjE2OCIgd2lkdGg9IjMyMCIgaGVpZ2h0PSI1MiIgZmlsbD0iI2Q2ZGRkZiIvPjxyZWN0IHg9IjM4IiB5PSI3MiIgd2lkdGg9IjcwIiBoZWlnaHQ9Ijk2IiBmaWxsPSIjMTczZDM0Ii8+PHJlY3QgeD0iMTI2IiB5PSI0OCIgd2lkdGg9Ijc2IiBoZWlnaHQ9IjEyMCIgZmlsbD0iIzUzNjY1ZiIvPjxyZWN0IHg9IjIyMCIgeT0iODgiIHdpZHRoPSI2MCIgaGVpZ2h0PSI4MCIgZmlsbD0iI2IyNGEzMiIvPjxnIGZpbGw9IiNmZmYiPjxyZWN0IHg9IjUxIiB5PSI4NiIgd2lkdGg9IjE0IiBoZWlnaHQ9IjE0Ii8+PHJlY3QgeD0iODAiIHk9Ijg2IiB3aWR0aD0iMTQiIGhlaWdodD0iMTQiLz48cmVjdCB4PSI1MSIgeT0iMTEzIiB3aWR0aD0iMTQiIGhlaWdodD0iMTQiLz48cmVjdCB4PSI4MCIgeT0iMTEzIiB3aWR0aD0iMTQiIGhlaWdodD0iMTQiLz48cmVjdCB4PSIxNDMiIHk9IjY0IiB3aWR0aD0iMTUiIGhlaWdodD0iMTUiLz48cmVjdCB4PSIxNzQiIHk9IjY0IiB3aWR0aD0iMTUiIGhlaWdodD0iMTUiLz48cmVjdCB4PSIxNDMiIHk9IjkyIiB3aWR0aD0iMTUiIGhlaWdodD0iMTUiLz48cmVjdCB4PSIxNzQiIHk9IjkyIiB3aWR0aD0iMTUiIGhlaWdodD0iMTUiLz48L2c+PC9zdmc+" alt="Edifício público" loading="lazy">
             <div class="news-item-body">
               <span class="news-kicker">POLÍTICA</span>
               <h2>Agenda pública reúne novos compromissos e encontros nesta tarde</h2>
@@ -1417,7 +1478,12 @@ function enterPanic() {
     });
 
     /* O menu continua sendo a porta discreta para voltar ao chat privado. */
-    $("panicMenuButton").onclick = authenticatePanicExit;
+  }
+
+  const panicMenuButton = $("panicMenuButton");
+
+  if (panicMenuButton) {
+    panicMenuButton.onclick = authenticatePanicExit;
   }
 }
 
@@ -1427,6 +1493,8 @@ function leavePanic() {
   $("panicScreen")
     ?.classList
     .add("hidden");
+
+  $("panicText")?.blur();
 }
 
 
