@@ -1787,6 +1787,107 @@
               }
 
               @media (max-width: 650px) {
+                .ai-disguise-app {
+                  width: 100%;
+                  max-width: 100%;
+                  height: 100%;
+                }
+
+                .ai-topbar {
+                  padding: 0 10px;
+                }
+
+                .ai-brand {
+                  gap: 8px;
+                }
+
+                .ai-brand-mark {
+                  width: 32px;
+                  height: 32px;
+                  flex-basis: 32px;
+                  border-radius: 10px;
+                }
+
+                .ai-brand-copy strong {
+                  font-size: 13px;
+                }
+
+                .ai-layout,
+                .ai-main {
+                  min-width: 0;
+                  width: 100%;
+                }
+
+                .ai-conversation {
+                  padding: 12px 10px 8px;
+                }
+
+                .ai-welcome {
+                  width: min(100%, 330px);
+                  margin: 7vh auto 18px;
+                }
+
+                .ai-welcome-icon {
+                  width: 44px;
+                  height: 44px;
+                  margin-bottom: 11px;
+                }
+
+                .ai-welcome h1 {
+                  font-size: 18px;
+                  line-height: 24px;
+                }
+
+                .ai-welcome p {
+                  font-size: 11px;
+                  line-height: 16px;
+                }
+
+                .ai-suggestions {
+                  width: 100%;
+                  max-width: 310px;
+                  grid-template-columns: 1fr;
+                  gap: 7px;
+                  margin-top: 16px;
+                }
+
+                .ai-suggestion {
+                  padding: 9px 10px;
+                  font-size: 10px;
+                }
+
+                .ai-message {
+                  max-width: 100%;
+                  margin-bottom: 12px;
+                }
+
+                .ai-message-bubble {
+                  max-width: 92%;
+                  font-size: 12px;
+                  line-height: 17px;
+                }
+
+                .ai-composer-wrap {
+                  padding: 7px 7px 9px;
+                }
+
+                .ai-composer {
+                  width: 100%;
+                  max-width: 100%;
+                  border-radius: 14px;
+                  padding: 6px;
+                }
+
+                .ai-composer textarea {
+                  font-size: 12px;
+                  min-height: 32px;
+                }
+
+                .ai-disclaimer {
+                  max-width: 100%;
+                  padding: 0 4px;
+                }
+
                 .ai-sidebar {
                   display: none;
                 }
@@ -3681,6 +3782,13 @@
       menu.className =
         "menu";
 
+      /* Menu compacto e responsivo: as reações continuam em grade,
+       * sem deixar o menu ocupar uma faixa excessivamente larga. */
+      menu.style.width = "220px";
+      menu.style.minWidth = "0";
+      menu.style.maxWidth = "calc(100vw - 20px)";
+      menu.style.boxSizing = "border-box";
+
 
       /*
        * IMPORTANTE:
@@ -3826,15 +3934,15 @@
 
           b.style.cssText =
             [
-              "width: 34px",
-              "height: 34px",
-              "min-width: 34px",
+              "width: 30px",
+              "height: 30px",
+              "min-width: 30px",
               "padding: 0",
               "margin: 0",
               "border: 0",
               "border-radius: 9px",
               "background: transparent",
-              "font-size: 21px",
+              "font-size: 19px",
               "line-height: 1",
               "display: inline-flex",
               "align-items: center",
