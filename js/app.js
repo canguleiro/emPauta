@@ -2,6 +2,8 @@ import {
   initializeApp
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 
+/* V10 — modo disfarce automático somente no mobile; desktop abre direto no chat. */
+
 import {
   getAuth,
   onAuthStateChanged,
@@ -1319,14 +1321,24 @@ async function authenticatePanicExit() {
     }
   }
 
-  /* Sem biometria ou após falha: mostra o PIN do dispositivo. */
+  /*
+   * Sem biometria ou após falha: sai visualmente do
+   * disfarce somente para exibir a proteção local.
+   *
+   * Se já existe PIN, mostramos o PIN.
+   * Se ainda não existe PIN, mostramos o mesmo teclado
+   * para que o usuário cadastre a senha deste dispositivo.
+   */
   leavePanic();
 
   if (pinReady) {
     lockApp();
     showToast("Digite o PIN para voltar ao chat.");
   } else {
-    unlockApp();
+    pinBuffer = "";
+    renderDots();
+    $("lockScreen")?.classList.remove("hidden");
+    showToast("Crie o PIN deste dispositivo para continuar.");
   }
 }
 
@@ -4842,23 +4854,32 @@ async function start() {
 
 
   /*
-   * Proteção local: toda abertura/recarregamento
-   * começa bloqueada quando já existe um PIN.
+   * MODO DISFARCE RESPONSIVO
+   *
+   * MOBILE:
+   * A aplicação sempre abre no portal de notícias.
+   * O chat somente aparece depois que o usuário toca
+   * no botão de menu (☰) e conclui a autenticação
+   * por biometria ou PIN.
+   *
+   * DESKTOP:
+   * Mantém o comportamento normal: abre diretamente
+   * no chat, sem entrar automaticamente no disfarce.
+   *
+   * Usamos a largura do viewport, e não User-Agent, para
+   * acompanhar corretamente celulares/tablets e o modo
+   * responsivo do navegador.
    */
 
-  if (!pinReady) {
+  const isMobileLayout =
+    window.matchMedia("(max-width: 767px)").matches;
 
-    showToast(
-      "Crie uma senha/PIN de 6 dígitos para proteger este dispositivo."
-    );
+  $("lockScreen")
+    ?.classList
+    .add("hidden");
 
-    $("lockScreen")
-      ?.classList
-      .remove("hidden");
-
-  } else {
-
-    lockApp();
+  if (isMobileLayout) {
+    enterPanic();
   }
 }
 
