@@ -954,16 +954,25 @@ async function registerBiometric() {
       );
 
       showToast(
-        "Biometria deste dispositivo ativada."
+        "Biometria ativada neste dispositivo."
       );
+
+      if ($("biometricBtn")) {
+        $("biometricBtn").textContent =
+          "Desbloquear com biometria";
+      }
+
+      unlockApp();
     }
 
   } catch (e) {
 
-    console.warn(e);
+    console.warn("WebAuthn/biometria:", e);
 
     showToast(
-      "Não foi possível ativar a biometria."
+      e?.name === "NotAllowedError"
+        ? "A autenticação biométrica foi cancelada."
+        : "Não foi possível ativar a biometria neste dispositivo."
     );
   }
 }
@@ -1231,11 +1240,92 @@ if ($("biometricBtn")) {
 
 function enterPanic() {
 
-  $("panicScreen")
-    ?.classList
-    .remove("hidden");
+  const screen = $("panicScreen");
 
-  $("panicText")?.focus();
+  if (!screen) return;
+
+  screen.classList.remove("hidden");
+
+  /*
+   * O conteúdo visual é genérico e não expõe nenhuma
+   * referência à conversa privada.
+   */
+  if (!screen.dataset.newsBuilt) {
+
+    screen.innerHTML = `
+      <div class="news-app-top">
+        <div class="news-brand">
+          <span class="news-brand-mark">N</span>
+          <div>
+            <strong>Notícias Agora</strong>
+            <small>últimas notícias</small>
+          </div>
+        </div>
+        <div class="news-top-actions">
+          <span>⌕</span>
+          <span>☰</span>
+        </div>
+      </div>
+
+      <nav class="news-categories">
+        <span class="active">Início</span>
+        <span>Brasil</span>
+        <span>Mundo</span>
+        <span>Tecnologia</span>
+        <span>Política</span>
+      </nav>
+
+      <main class="news-feed">
+        <article class="news-lead">
+          <div class="news-kicker">EM DESTAQUE</div>
+          <h1>Informação em tempo real para acompanhar o que acontece</h1>
+          <p>Confira as principais atualizações e notícias do dia.</p>
+          <small>Agora · Atualizado recentemente</small>
+        </article>
+
+        <div class="news-divider"></div>
+
+        <article class="news-item">
+          <div>
+            <span class="news-kicker">BRASIL</span>
+            <h2>Novas informações movimentam o noticiário desta manhã</h2>
+            <small>Há poucos minutos</small>
+          </div>
+          <div class="news-thumb">NEWS</div>
+        </article>
+
+        <article class="news-item">
+          <div>
+            <span class="news-kicker">TECNOLOGIA</span>
+            <h2>Aplicativos ganham novos recursos para usuários</h2>
+            <small>Hoje · 09:40</small>
+          </div>
+          <div class="news-thumb">TECH</div>
+        </article>
+      </main>
+
+      <button id="panicUnlock" class="news-secret" aria-label="Abrir acesso privado">●</button>
+      <textarea id="panicText" aria-hidden="true" tabindex="-1"></textarea>
+    `;
+
+    screen.dataset.newsBuilt = "1";
+
+    $("panicUnlock").onclick = () => {
+      const code = prompt("Código de saída");
+
+      if (code === localStorage.getItem("ep_panic_code") && code) {
+        leavePanic();
+      } else if (!localStorage.getItem("ep_panic_code")) {
+        const n = prompt("Crie um código curto para sair do modo notícias");
+        if (n) {
+          localStorage.setItem("ep_panic_code", n);
+          leavePanic();
+        }
+      } else {
+        showToast("Código incorreto.");
+      }
+    };
+  }
 }
 
 
@@ -1248,53 +1338,7 @@ function leavePanic() {
 
 
 if ($("panicBtn")) {
-  $("panicBtn").onclick =
-    enterPanic;
-}
-
-
-if ($("panicUnlock")) {
-
-  $("panicUnlock").onclick =
-    () => {
-
-      const code =
-        prompt(
-          "Código de saída"
-        );
-
-      if (
-        code ===
-          localStorage.getItem(
-            "ep_panic_code"
-          ) &&
-        code
-      ) {
-
-        leavePanic();
-
-      } else if (
-        !localStorage.getItem(
-          "ep_panic_code"
-        )
-      ) {
-
-        const n =
-          prompt(
-            "Crie um código curto para sair do modo disfarce"
-          );
-
-        if (n) {
-
-          localStorage.setItem(
-            "ep_panic_code",
-            n
-          );
-
-          leavePanic();
-        }
-      }
-    };
+  $("panicBtn").onclick = enterPanic;
 }
 
 /* =========================================================
@@ -4487,6 +4531,8 @@ window.addEventListener(
 
 async function start() {
 
+  updateDeviceGate("Dispositivo autorizado. Abrindo…");
+
   /*
    * Começamos sempre como
    * "não pronto".
@@ -4601,120 +4647,60 @@ async function start() {
         "ep_biometric_cred"
       )
         ? "Desbloquear com biometria"
-        : "Ativar biometria deste dispositivo";
+        : "Usar biometria neste dispositivo";
   }
 
 
   /*
-   * Primeiro acesso:
-   * pede criação do PIN.
+   * Proteção local: toda abertura/recarregamento
+   * começa bloqueada quando já existe um PIN.
    */
 
   if (!pinReady) {
 
     showToast(
-      "Crie um PIN de 6 dígitos para proteger este dispositivo."
+      "Crie uma senha/PIN de 6 dígitos para proteger este dispositivo."
     );
 
     $("lockScreen")
       ?.classList
       .remove("hidden");
+
+  } else {
+
+    lockApp();
   }
 }
 
 /* =========================================================
-   LOGIN
+   ACESSO DO DISPOSITIVO
 ========================================================= */
 
-let startingSession = false;
+/*
+ * Não exibimos mais uma tela pública de e-mail/senha.
+ * O Firebase Auth continua responsável pela sessão, mas,
+ * quando ela já estiver persistida no navegador, a aplicação
+ * entra diretamente no modo protegido por PIN/biometria.
+ *
+ * Se o navegador não tiver uma sessão Firebase válida, esta
+ * tela apenas informa que o dispositivo ainda precisa ser
+ * autorizado. Isso evita criar um falso mecanismo de login
+ * local que não teria como autenticar no Firebase.
+ */
 
+function updateDeviceGate(message) {
 
-if ($("authForm")) {
-
-  $("authForm").onsubmit =
-    async e => {
-
-      e.preventDefault();
-
-
-      $("authError").textContent =
-        "";
-
-
-      const email =
-        $("email").value.trim();
-
-
-      const password =
-        $("password").value;
-
-
-      const nickname =
-        $("nickname").value.trim();
-
-
-      if (!nickname) {
-
-        $("authError").textContent =
-          "Informe um nome/apelido para este dispositivo.";
-
-        return;
-      }
-
-
-      /*
-       * Guardamos o apelido temporariamente.
-       *
-       * O Firebase conclui o login de forma
-       * assíncrona e onAuthStateChanged será
-       * o único ponto que inicia a sessão.
-       */
-
-      sessionStorage.setItem(
-        "ep_pending_nick",
-        nickname
-      );
-
-
-      try {
-
-        await signInWithEmailAndPassword(
-          auth,
-          email,
-          password
-        );
-
-      } catch (err) {
-
-        sessionStorage.removeItem(
-          "ep_pending_nick"
-        );
-
-
-        console.error(
-          "Falha no login:",
-          err
-        );
-
-
-        if (
-          err.code ===
-          "auth/invalid-credential"
-        ) {
-
-          $("authError").textContent =
-            "E-mail ou senha inválidos.";
-
-        } else {
-
-          $("authError").textContent =
-            err.message ||
-            "Não foi possível entrar.";
-        }
-      }
-    };
+  if ($("authStatus")) {
+    $("authStatus").textContent =
+      message ||
+      "Aguardando autorização deste dispositivo…";
+  }
 }
 
+
+updateDeviceGate(
+  "Verificando autorização do dispositivo…"
+);
 
 /* =========================================================
    ESTADO DE AUTENTICAÇÃO
@@ -4745,6 +4731,14 @@ onAuthStateChanged(
         false;
 
       updateSendState();
+
+      updateDeviceGate(
+        "Este dispositivo ainda não está autorizado."
+      );
+
+      $("authScreen")
+        ?.classList
+        .remove("hidden");
 
       return;
     }
@@ -5334,87 +5328,22 @@ if ($("hideNow")) {
 if ($("logoutBtn")) {
 
   $("logoutBtn").onclick =
-    async () => {
-
-      try {
-
-        await saveStatus(
-          false
-        );
-
-      } catch (e) {
-
-        console.warn(
-          "Não foi possível atualizar o status antes do logout:",
-          e
-        );
-      }
-
+    () => {
 
       /*
-       * Remove listeners.
+       * Neste modo, "sair" significa bloquear o
+       * dispositivo. A sessão Firebase permanece
+       * persistida para que não seja necessário
+       * voltar a digitar e-mail e senha.
        */
 
-      unsubscribeMessages?.();
+      lockApp();
 
-      unsubscribeKeys?.();
-
-      unsubscribeStatus?.();
-
-
-      /*
-       * Cancela tentativa de reconexão.
-       */
-
-      if (
-        messageListenerRetry
-      ) {
-
-        clearTimeout(
-          messageListenerRetry
-        );
-
-        messageListenerRetry =
-          null;
-      }
-
-
-      /*
-       * Marca a sessão como encerrada.
-       */
-
-      sessionReady =
-        false;
-
-      keysReady =
-        false;
-
-      messagesReady =
-        false;
-
-      statusReady =
-        false;
-
-      updateSendState();
-
-
-      /*
-       * Sai do Firebase.
-       */
-
-      await signOut(
-        auth
+      showToast(
+        "Dispositivo bloqueado. Use sua senha ou biometria para voltar."
       );
-
-
-      /*
-       * Recarrega a aplicação.
-       */
-
-      location.reload();
     };
 }
-
 
 /* =========================================================
    FIXAÇÃO
