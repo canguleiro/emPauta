@@ -1351,183 +1351,1438 @@
 
       screen.classList.remove("hidden");
 
-      if (!screen.dataset.newsBuilt) {
+      /*
+       * NOVO MODO DISFARCE:
+       *
+       * Em vez do antigo portal de notícias, o disfarce agora
+       * se comporta como um pequeno assistente de IA.
+       *
+       * A interface é realmente interativa:
+       * - permite digitar;
+       * - cria novas conversas;
+       * - mantém um histórico local;
+       * - permite editar mensagens;
+       * - permite copiar respostas;
+       * - possui respostas locais para funcionar sem API externa;
+       * - mantém o botão de menu como porta discreta para o chat.
+       *
+       * O conteúdo digitado neste modo NÃO é enviado para uma IA
+       * externa por esta implementação.
+       */
+
+      if (!screen.dataset.aiBuilt) {
 
         screen.innerHTML = `
-          <div class="news-app-top">
-            <div class="news-brand">
-              <span class="news-brand-mark">N</span>
-              <div>
-                <strong>Notícias Agora</strong>
-                <small>últimas notícias</small>
+          <div class="ai-disguise-app">
+
+            <style>
+              .ai-disguise-app {
+                --ai-bg: #f7f8fa;
+                --ai-panel: #ffffff;
+                --ai-border: #e4e7eb;
+                --ai-text: #17202a;
+                --ai-muted: #6b7280;
+                --ai-accent: #173d34;
+                --ai-accent-soft: #e8f0ed;
+                --ai-user: #e4f3ed;
+                --ai-shadow: 0 8px 30px rgba(15,23,42,.08);
+
+                position: absolute;
+                inset: 0;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+                background: var(--ai-bg);
+                color: var(--ai-text);
+                font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont,
+                  "Segoe UI", sans-serif;
+              }
+
+              .ai-topbar {
+                height: 62px;
+                min-height: 62px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0 14px;
+                background: var(--ai-panel);
+                border-bottom: 1px solid var(--ai-border);
+                box-sizing: border-box;
+              }
+
+              .ai-brand {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                min-width: 0;
+              }
+
+              .ai-brand-mark {
+                width: 34px;
+                height: 34px;
+                flex: 0 0 34px;
+                border-radius: 11px;
+                display: grid;
+                place-items: center;
+                background: var(--ai-accent);
+                color: white;
+                font-size: 17px;
+                font-weight: 800;
+                box-shadow: 0 3px 10px rgba(23,61,52,.18);
+              }
+
+              .ai-brand-copy {
+                min-width: 0;
+                display: flex;
+                flex-direction: column;
+              }
+
+              .ai-brand-copy strong {
+                font-size: 14px;
+                line-height: 18px;
+                white-space: nowrap;
+              }
+
+              .ai-brand-copy small {
+                color: var(--ai-muted);
+                font-size: 10px;
+                line-height: 13px;
+              }
+
+              .ai-top-actions {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+              }
+
+              .ai-icon-button {
+                width: 38px;
+                height: 38px;
+                border: 0;
+                border-radius: 10px;
+                background: transparent;
+                color: #4b5563;
+                display: grid;
+                place-items: center;
+                cursor: pointer;
+                font-size: 20px;
+              }
+
+              .ai-icon-button:hover {
+                background: #f0f2f4;
+              }
+
+              .ai-icon-button.menu {
+                font-size: 22px;
+              }
+
+              .ai-layout {
+                flex: 1;
+                min-height: 0;
+                display: flex;
+                overflow: hidden;
+              }
+
+              .ai-sidebar {
+                width: 190px;
+                flex: 0 0 190px;
+                background: #f1f3f5;
+                border-right: 1px solid var(--ai-border);
+                display: flex;
+                flex-direction: column;
+                padding: 12px 9px;
+                box-sizing: border-box;
+              }
+
+              .ai-new-chat {
+                width: 100%;
+                border: 1px solid var(--ai-border);
+                border-radius: 10px;
+                background: white;
+                color: var(--ai-text);
+                padding: 9px 10px;
+                font-size: 12px;
+                font-weight: 650;
+                cursor: pointer;
+                text-align: left;
+              }
+
+              .ai-new-chat:hover {
+                background: #fafafa;
+              }
+
+              .ai-history-label {
+                margin: 17px 8px 7px;
+                color: var(--ai-muted);
+                font-size: 9px;
+                font-weight: 750;
+                text-transform: uppercase;
+                letter-spacing: .08em;
+              }
+
+              .ai-history {
+                min-height: 0;
+                overflow-y: auto;
+              }
+
+              .ai-history-item {
+                width: 100%;
+                border: 0;
+                background: transparent;
+                padding: 9px 8px;
+                border-radius: 8px;
+                text-align: left;
+                font-size: 11px;
+                color: #374151;
+                cursor: pointer;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+              }
+
+              .ai-history-item:hover,
+              .ai-history-item.active {
+                background: #e5e8eb;
+              }
+
+              .ai-main {
+                flex: 1;
+                min-width: 0;
+                min-height: 0;
+                display: flex;
+                flex-direction: column;
+                background: var(--ai-panel);
+              }
+
+              .ai-conversation {
+                flex: 1;
+                min-height: 0;
+                overflow-y: auto;
+                padding: 20px 18px 12px;
+                box-sizing: border-box;
+                scroll-behavior: smooth;
+              }
+
+              .ai-welcome {
+                max-width: 580px;
+                margin: 5vh auto 24px;
+                text-align: center;
+              }
+
+              .ai-welcome-icon {
+                width: 48px;
+                height: 48px;
+                margin: 0 auto 13px;
+                border-radius: 15px;
+                display: grid;
+                place-items: center;
+                background: var(--ai-accent-soft);
+                color: var(--ai-accent);
+                font-size: 23px;
+                font-weight: 800;
+              }
+
+              .ai-welcome h1 {
+                margin: 0 0 7px;
+                font-size: 21px;
+                line-height: 27px;
+                letter-spacing: -.02em;
+              }
+
+              .ai-welcome p {
+                margin: 0 auto;
+                color: var(--ai-muted);
+                font-size: 12px;
+                line-height: 18px;
+                max-width: 390px;
+              }
+
+              .ai-suggestions {
+                margin: 20px auto 0;
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 8px;
+                max-width: 430px;
+              }
+
+              .ai-suggestion {
+                border: 1px solid var(--ai-border);
+                border-radius: 11px;
+                padding: 10px;
+                background: white;
+                color: #374151;
+                text-align: left;
+                cursor: pointer;
+                font-size: 10px;
+                line-height: 14px;
+              }
+
+              .ai-suggestion:hover {
+                background: #f8faf9;
+                border-color: #cfd8d4;
+              }
+
+              .ai-message {
+                display: flex;
+                margin: 0 auto 16px;
+                max-width: 760px;
+              }
+
+              .ai-message.user {
+                justify-content: flex-end;
+              }
+
+              .ai-message.assistant {
+                justify-content: flex-start;
+              }
+
+              .ai-message-bubble {
+                max-width: min(82%, 620px);
+                border-radius: 15px;
+                padding: 10px 12px;
+                font-size: 12px;
+                line-height: 18px;
+                white-space: pre-wrap;
+                overflow-wrap: anywhere;
+              }
+
+              .ai-message.user .ai-message-bubble {
+                background: var(--ai-user);
+                border: 1px solid #d8ebe3;
+                border-bottom-right-radius: 5px;
+              }
+
+              .ai-message.assistant .ai-message-bubble {
+                background: #f4f5f6;
+                border: 1px solid #e7e8ea;
+                border-bottom-left-radius: 5px;
+              }
+
+              .ai-message-meta {
+                margin-top: 4px;
+                font-size: 8px;
+                color: #9aa0a6;
+                text-align: right;
+              }
+
+              .ai-message-actions {
+                display: flex;
+                gap: 4px;
+                margin-top: 5px;
+              }
+
+              .ai-message-action {
+                border: 0;
+                background: transparent;
+                color: #7b8188;
+                padding: 2px 4px;
+                font-size: 9px;
+                cursor: pointer;
+              }
+
+              .ai-message-action:hover {
+                color: var(--ai-accent);
+              }
+
+              .ai-composer-wrap {
+                border-top: 1px solid var(--ai-border);
+                padding: 10px 12px 12px;
+                background: white;
+              }
+
+              .ai-composer {
+                max-width: 760px;
+                margin: 0 auto;
+                display: flex;
+                align-items: flex-end;
+                gap: 7px;
+                border: 1px solid #d8dce0;
+                border-radius: 15px;
+                padding: 7px;
+                background: #fff;
+                box-shadow: 0 2px 12px rgba(15,23,42,.04);
+                box-sizing: border-box;
+              }
+
+              .ai-composer textarea {
+                flex: 1;
+                min-width: 0;
+                min-height: 34px;
+                max-height: 115px;
+                resize: none;
+                border: 0;
+                outline: 0;
+                background: transparent;
+                color: var(--ai-text);
+                font: inherit;
+                font-size: 12px;
+                line-height: 17px;
+                padding: 7px 5px;
+                box-sizing: border-box;
+              }
+
+              .ai-composer textarea::placeholder {
+                color: #a0a6ad;
+              }
+
+              .ai-send {
+                width: 35px;
+                height: 35px;
+                flex: 0 0 35px;
+                border: 0;
+                border-radius: 10px;
+                background: var(--ai-accent);
+                color: white;
+                display: grid;
+                place-items: center;
+                cursor: pointer;
+                font-size: 16px;
+              }
+
+              .ai-send:disabled {
+                opacity: .35;
+                cursor: default;
+              }
+
+              .ai-disclaimer {
+                max-width: 760px;
+                margin: 5px auto 0;
+                text-align: center;
+                color: #a1a6ac;
+                font-size: 8px;
+              }
+
+              .ai-typing {
+                display: inline-flex;
+                gap: 3px;
+                padding: 3px 2px;
+                align-items: center;
+              }
+
+              .ai-typing span {
+                width: 4px;
+                height: 4px;
+                border-radius: 50%;
+                background: #9aa0a6;
+                animation: aiTyping 1s infinite ease-in-out;
+              }
+
+              .ai-typing span:nth-child(2) {
+                animation-delay: .15s;
+              }
+
+              .ai-typing span:nth-child(3) {
+                animation-delay: .3s;
+              }
+
+              @keyframes aiTyping {
+                0%, 60%, 100% {
+                  transform: translateY(0);
+                  opacity: .45;
+                }
+                30% {
+                  transform: translateY(-3px);
+                  opacity: 1;
+                }
+              }
+
+              @media (max-width: 650px) {
+                .ai-sidebar {
+                  display: none;
+                }
+
+                .ai-topbar {
+                  height: 58px;
+                  min-height: 58px;
+                }
+
+                .ai-conversation {
+                  padding: 15px 11px 10px;
+                }
+
+                .ai-welcome {
+                  margin-top: 8vh;
+                }
+
+                .ai-welcome h1 {
+                  font-size: 19px;
+                }
+
+                .ai-suggestions {
+                  grid-template-columns: 1fr;
+                  max-width: 320px;
+                }
+
+                .ai-message-bubble {
+                  max-width: 88%;
+                  font-size: 12px;
+                }
+
+                .ai-composer-wrap {
+                  padding: 8px 8px 10px;
+                }
+
+                .ai-disclaimer {
+                  font-size: 7px;
+                }
+              }
+            </style>
+
+            <header class="ai-topbar">
+              <div class="ai-brand">
+                <span class="ai-brand-mark">✦</span>
+                <div class="ai-brand-copy">
+                  <strong>Assistente</strong>
+                  <small>Seu espaço de ideias</small>
+                </div>
               </div>
-            </div>
 
-            <div class="news-top-actions">
-              <button
-                class="news-search-button"
-                type="button"
-                aria-label="Pesquisar notícias"
-                title="Pesquisar"
-              >⌕</button>
+              <div class="ai-top-actions">
+                <button
+                  id="aiNewChatTop"
+                  class="ai-icon-button"
+                  type="button"
+                  title="Nova conversa"
+                  aria-label="Nova conversa"
+                >＋</button>
 
-              <button
-                id="panicMenuButton"
-                class="news-menu-button"
-                type="button"
-                aria-label="Abrir menu"
-                title="Menu"
-              >☰</button>
+                <button
+                  id="panicMenuButton"
+                  class="ai-icon-button menu"
+                  type="button"
+                  title="Menu"
+                  aria-label="Abrir menu"
+                >☰</button>
+              </div>
+            </header>
+
+            <div class="ai-layout">
+
+              <aside class="ai-sidebar">
+
+                <button
+                  id="aiNewChat"
+                  class="ai-new-chat"
+                  type="button"
+                >＋ Nova conversa</button>
+
+                <div class="ai-history-label">Recentes</div>
+
+                <div
+                  id="aiHistory"
+                  class="ai-history"
+                  aria-label="Conversas recentes"
+                ></div>
+
+              </aside>
+
+              <section class="ai-main">
+
+                <div
+                  id="aiConversation"
+                  class="ai-conversation"
+                  aria-live="polite"
+                ></div>
+
+                <div class="ai-composer-wrap">
+
+                  <div class="ai-composer">
+
+                    <textarea
+                      id="aiInput"
+                      rows="1"
+                      maxlength="4000"
+                      placeholder="Escreva uma mensagem..."
+                      aria-label="Mensagem"
+                    ></textarea>
+
+                    <button
+                      id="aiSend"
+                      class="ai-send"
+                      type="button"
+                      title="Enviar"
+                      aria-label="Enviar"
+                      disabled
+                    >↑</button>
+
+                  </div>
+
+                  <div class="ai-disclaimer">
+                    Assistente pessoal · espaço local de escrita
+                  </div>
+
+                </div>
+
+              </section>
             </div>
           </div>
-
-          <nav class="news-categories" aria-label="Categorias">
-            <button class="active" data-news-filter="Todos">Início</button>
-            <button data-news-filter="Brasil">Brasil</button>
-            <button data-news-filter="Mundo">Mundo</button>
-            <button data-news-filter="Tecnologia">Tecnologia</button>
-            <button data-news-filter="Política">Política</button>
-          </nav>
-
-          <main class="news-feed">
-
-            <article class="news-lead news-story" data-news-category="Brasil">
-              <img
-                class="news-lead-image"
-                src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5MDAgNDIwIj48cmVjdCB3aWR0aD0iOTAwIiBoZWlnaHQ9IjQyMCIgZmlsbD0iI2U4ZWVlOSIvPjxyZWN0IHg9IjM4IiB5PSIzNSIgd2lkdGg9IjgyNCIgaGVpZ2h0PSIzNTAiIHJ4PSIyNCIgZmlsbD0iI2ZmZiIvPjxyZWN0IHg9Ijc2IiB5PSI3MiIgd2lkdGg9IjI3MCIgaGVpZ2h0PSIyMiIgcng9IjUiIGZpbGw9IiMxNzNkMzQiLz48cmVjdCB4PSI3NiIgeT0iMTE1IiB3aWR0aD0iNzQ4IiBoZWlnaHQ9IjkiIHJ4PSI0IiBmaWxsPSIjZDZkZGRhIi8+PHJlY3QgeD0iNzYiIHk9IjE0NSIgd2lkdGg9IjY5MCIgaGVpZ2h0PSI5IiByeD0iNCIgZmlsbD0iI2Q2ZGRkYSIvPjxyZWN0IHg9Ijc2IiB5PSIxOTAiIHdpZHRoPSI0NjAiIGhlaWdodD0iMTMwIiByeD0iMTIiIGZpbGw9IiNjYmQ4ZDEiLz48Y2lyY2xlIGN4PSI2NTAiIGN5PSIyNTQiIHI9IjYyIiBmaWxsPSIjMTczZDM0Ii8+PHBhdGggZD0iTTYyMCAyNTRoNjBNNjUwIDIyNHY2MCIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjEyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48L3N2Zz4="
-                alt="Jornais e notícias"
-                loading="eager"
-              >
-              <div class="news-lead-body">
-                <div class="news-kicker">BRASIL · EM DESTAQUE</div>
-                <h1>Novas informações movimentam o noticiário desta manhã</h1>
-                <p>Confira os principais acontecimentos e as atualizações mais recentes.</p>
-                <div class="news-meta">
-                  <span>Notícias Agora</span><span>·</span><span>Há 12 min</span>
-                </div>
-              </div>
-            </article>
-
-            <div class="news-section-head">
-              <strong>Últimas notícias</strong>
-              <span>Atualizado agora</span>
-            </div>
-
-            <div class="news-divider"></div>
-
-            <div id="newsStories">
-
-              <article class="news-item news-story" data-news-category="Brasil">
-                <img class="news-thumb-image" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMjAgMjIwIj48cmVjdCB3aWR0aD0iMzIwIiBoZWlnaHQ9IjIyMCIgZmlsbD0iI2RmZTllMiIvPjxyZWN0IHg9IjI4IiB5PSIzOCIgd2lkdGg9IjI2NCIgaGVpZ2h0PSIxNDUiIHJ4PSIxMiIgZmlsbD0iI2ZmZiIvPjxyZWN0IHg9IjUyIiB5PSI2MiIgd2lkdGg9IjIxNiIgaGVpZ2h0PSIxMiIgcng9IjQiIGZpbGw9IiMxNzNkMzQiLz48cGF0aCBkPSJNNjAgMTQzbDM0LTQyIDM1IDI5IDQyLTU2IDU3IDY5IiBmaWxsPSJub25lIiBzdHJva2U9IiNiMjRhMzIiIHN0cm9rZS13aWR0aD0iMTAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjxjaXJjbGUgY3g9IjIzMyIgY3k9Ijg1IiByPSIxNCIgZmlsbD0iIzE3M2QzNCIvPjwvc3ZnPg==" alt="Congresso e política" loading="lazy">
-                <div class="news-item-body">
-                  <span class="news-kicker">BRASIL</span>
-                  <h2>Congresso retoma agenda com novas propostas em discussão</h2>
-                  <small>Há 18 min · 3 min de leitura</small>
-                </div>
-              </article>
-
-              <article class="news-item news-story" data-news-category="Tecnologia">
-                <img class="news-thumb-image" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMjAgMjIwIj48cmVjdCB3aWR0aD0iMzIwIiBoZWlnaHQ9IjIyMCIgZmlsbD0iI2U2ZWNlZSIvPjxyZWN0IHg9IjU2IiB5PSIzNiIgd2lkdGg9IjIwOCIgaGVpZ2h0PSIxMjQiIHJ4PSIxMiIgZmlsbD0iIzI2MzIzOCIvPjxyZWN0IHg9IjcwIiB5PSI1MCIgd2lkdGg9IjE4MCIgaGVpZ2h0PSI5NiIgcng9IjciIGZpbGw9IiNkY2U3ZTIiLz48Y2lyY2xlIGN4PSIxMDQiIGN5PSI4MiIgcj0iMTgiIGZpbGw9IiMxNzNkMzQiLz48cmVjdCB4PSIxMzMiIHk9IjY4IiB3aWR0aD0iODgiIGhlaWdodD0iOSIgcng9IjQiIGZpbGw9IiMxNzNkMzQiLz48cmVjdCB4PSIxMzMiIHk9Ijg4IiB3aWR0aD0iNjYiIGhlaWdodD0iOCIgcng9IjQiIGZpbGw9IiM5YWE5YTMiLz48cGF0aCBkPSJNMTI1IDE2MHYyME0xOTUgMTYwdjIwTTk1IDE4MGgxMzAiIHN0cm9rZT0iIzI2MzIzOCIgc3Ryb2tlLXdpZHRoPSI5IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48L3N2Zz4=" alt="Tecnologia e eletrônicos" loading="lazy">
-                <div class="news-item-body">
-                  <span class="news-kicker">TECNOLOGIA</span>
-                  <h2>Novas ferramentas digitais prometem facilitar tarefas do dia a dia</h2>
-                  <small>Há 27 min · 2 min de leitura</small>
-                </div>
-              </article>
-
-              <article class="news-item news-story" data-news-category="Mundo">
-                <img class="news-thumb-image" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMjAgMjIwIj48cmVjdCB3aWR0aD0iMzIwIiBoZWlnaHQ9IjIyMCIgZmlsbD0iI2UyZTllZCIvPjxjaXJjbGUgY3g9IjE2MCIgY3k9IjExMCIgcj0iNzgiIGZpbGw9IiMxNzNkMzQiLz48cGF0aCBkPSJNOTIgOTFjMzAtMTggNTUtMjEgODItMTUgMjQgNSA0MyAyIDU0LThNOTQgMTMwYzM1IDEzIDYwIDkgODItMyAyNC0xMyAzOS0xMCA1MiAyTTE0NSAzNGMtMTIgMzItMTQgNTQtOSA3NiA2IDI4IDEgNDktMTIgNzJNMTkwIDM5YzkgMjkgOSA1Mi0yIDczLTEyIDI1LTkgNDggMyA3MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZGNlOGUxIiBzdHJva2Utd2lkdGg9IjgiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPg==" alt="Jornal internacional" loading="lazy">
-                <div class="news-item-body">
-                  <span class="news-kicker">MUNDO</span>
-                  <h2>Mercados internacionais acompanham novos indicadores econômicos</h2>
-                  <small>Há 34 min · 4 min de leitura</small>
-                </div>
-              </article>
-
-              <article class="news-item news-story" data-news-category="Política">
-                <img class="news-thumb-image" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMjAgMjIwIj48cmVjdCB3aWR0aD0iMzIwIiBoZWlnaHQ9IjIyMCIgZmlsbD0iI2ViZThlNCIvPjxwYXRoIGQ9Ik00MiA4OGgyMzZMMTYwIDQ1eiIgZmlsbD0iIzE3M2QzNCIvPjxwYXRoIGQ9Ik01OCA5MXY3M00xMDEgOTF2NzNNMTQ1IDkxdjczTTE4OCA5MXY3M00yMzIgOTF2NzNNMjc0IDkxdjczIiBzdHJva2U9IiMxNzNkMzQiIHN0cm9rZS13aWR0aD0iMTUiLz48cmVjdCB4PSIzNiIgeT0iMTY0IiB3aWR0aD0iMjQ4IiBoZWlnaHQ9IjE2IiByeD0iNSIgZmlsbD0iI2IyNGEzMiIvPjwvc3ZnPg==" alt="Notícias e política" loading="lazy">
-                <div class="news-item-body">
-                  <span class="news-kicker">POLÍTICA</span>
-                  <h2>Reuniões desta semana devem definir prioridades para os próximos dias</h2>
-                  <small>Há 42 min · 3 min de leitura</small>
-                </div>
-              </article>
-
-              <article class="news-item news-story" data-news-category="Brasil">
-                <img class="news-thumb-image" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMjAgMjIwIj48cmVjdCB3aWR0aD0iMzIwIiBoZWlnaHQ9IjIyMCIgZmlsbD0iI2VmZWFlNCIvPjxyZWN0IHg9IjQyIiB5PSIyOCIgd2lkdGg9IjIzNiIgaGVpZ2h0PSIxNjQiIHJ4PSI4IiBmaWxsPSIjZmZmIi8+PHJlY3QgeD0iNjIiIHk9IjQ4IiB3aWR0aD0iMTE2IiBoZWlnaHQ9IjEyIiByeD0iNCIgZmlsbD0iIzE3M2QzNCIvPjxyZWN0IHg9IjYyIiB5PSI3NiIgd2lkdGg9IjE5NiIgaGVpZ2h0PSI3IiByeD0iMyIgZmlsbD0iI2FhYjViMCIvPjxyZWN0IHg9IjYyIiB5PSI5MiIgd2lkdGg9IjE4MCIgaGVpZ2h0PSI3IiByeD0iMyIgZmlsbD0iI2FhYjViMCIvPjxyZWN0IHg9IjYyIiB5PSIxMTciIHdpZHRoPSI4NCIgaGVpZ2h0PSI1NSIgcng9IjUiIGZpbGw9IiNkNWRmZGEiLz48cmVjdCB4PSIxNTgiIHk9IjExNyIgd2lkdGg9IjEwMCIgaGVpZ2h0PSI3IiByeD0iMyIgZmlsbD0iI2MyY2JjNyIvPjxyZWN0IHg9IjE1OCIgeT0iMTMzIiB3aWR0aD0iOTIiIGhlaWdodD0iNyIgcng9IjMiIGZpbGw9IiNjMmNiYzciLz48cmVjdCB4PSIxNTgiIHk9IjE0OSIgd2lkdGg9Ijc1IiBoZWlnaHQ9IjciIHJ4PSIzIiBmaWxsPSIjYzJjYmM3Ii8+PC9zdmc+" alt="Noticiário impresso" loading="lazy">
-                <div class="news-item-body">
-                  <span class="news-kicker">BRASIL</span>
-                  <h2>Serviços e cidades anunciam mudanças para os próximos dias</h2>
-                  <small>Há 51 min · 3 min de leitura</small>
-                </div>
-              </article>
-
-              <article class="news-item news-story" data-news-category="Tecnologia">
-                <img class="news-thumb-image" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMjAgMjIwIj48cmVjdCB3aWR0aD0iMzIwIiBoZWlnaHQ9IjIyMCIgZmlsbD0iI2U0ZWNlOCIvPjxwYXRoIGQ9Ik0xNjAgMzVsNzggMjh2NTFjMCA0My0zMCA2NC03OCA3OC00OC0xNC03OC0zNS03OC03OFY2M3oiIGZpbGw9IiMxNzNkMzQiLz48cGF0aCBkPSJNMTI2IDExMWwyMyAyMyA0OC01NSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjEzIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48L3N2Zz4=" alt="Tecnologia e computador" loading="lazy">
-                <div class="news-item-body">
-                  <span class="news-kicker">TECNOLOGIA</span>
-                  <h2>Atualização de aplicativos amplia recursos de segurança e privacidade</h2>
-                  <small>Há 1 h · 2 min de leitura</small>
-                </div>
-              </article>
-
-              <article class="news-item news-story" data-news-category="Mundo">
-                <img class="news-thumb-image" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMjAgMjIwIj48cmVjdCB3aWR0aD0iMzIwIiBoZWlnaHQ9IjIyMCIgZmlsbD0iI2U3ZWNlZiIvPjxyZWN0IHk9IjE2OCIgd2lkdGg9IjMyMCIgaGVpZ2h0PSI1MiIgZmlsbD0iI2Q2ZGRkZiIvPjxyZWN0IHg9IjM4IiB5PSI3MiIgd2lkdGg9IjcwIiBoZWlnaHQ9Ijk2IiBmaWxsPSIjMTczZDM0Ii8+PHJlY3QgeD0iMTI2IiB5PSI0OCIgd2lkdGg9Ijc2IiBoZWlnaHQ9IjEyMCIgZmlsbD0iIzUzNjY1ZiIvPjxyZWN0IHg9IjIyMCIgeT0iODgiIHdpZHRoPSI2MCIgaGVpZ2h0PSI4MCIgZmlsbD0iI2IyNGEzMiIvPjxnIGZpbGw9IiNmZmYiPjxyZWN0IHg9IjUxIiB5PSI4NiIgd2lkdGg9IjE0IiBoZWlnaHQ9IjE0Ii8+PHJlY3QgeD0iODAiIHk9Ijg2IiB3aWR0aD0iMTQiIGhlaWdodD0iMTQiLz48cmVjdCB4PSI1MSIgeT0iMTEzIiB3aWR0aD0iMTQiIGhlaWdodD0iMTQiLz48cmVjdCB4PSI4MCIgeT0iMTEzIiB3aWR0aD0iMTQiIGhlaWdodD0iMTQiLz48cmVjdCB4PSIxNDMiIHk9IjY0IiB3aWR0aD0iMTUiIGhlaWdodD0iMTUiLz48cmVjdCB4PSIxNzQiIHk9IjY0IiB3aWR0aD0iMTUiIGhlaWdodD0iMTUiLz48cmVjdCB4PSIxNDMiIHk9IjkyIiB3aWR0aD0iMTUiIGhlaWdodD0iMTUiLz48cmVjdCB4PSIxNzQiIHk9IjkyIiB3aWR0aD0iMTUiIGhlaWdodD0iMTUiLz48L2c+PC9zdmc+" alt="Paisagem internacional" loading="lazy">
-                <div class="news-item-body">
-                  <span class="news-kicker">MUNDO</span>
-                  <h2>Países anunciam novas iniciativas de cooperação internacional</h2>
-                  <small>Há 1 h · 5 min de leitura</small>
-                </div>
-              </article>
-
-              <article class="news-item news-story" data-news-category="Política">
-                <img class="news-thumb-image" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMjAgMjIwIj48cmVjdCB3aWR0aD0iMzIwIiBoZWlnaHQ9IjIyMCIgZmlsbD0iI2U3ZWNlZiIvPjxyZWN0IHk9IjE2OCIgd2lkdGg9IjMyMCIgaGVpZ2h0PSI1MiIgZmlsbD0iI2Q2ZGRkZiIvPjxyZWN0IHg9IjM4IiB5PSI3MiIgd2lkdGg9IjcwIiBoZWlnaHQ9Ijk2IiBmaWxsPSIjMTczZDM0Ii8+PHJlY3QgeD0iMTI2IiB5PSI0OCIgd2lkdGg9Ijc2IiBoZWlnaHQ9IjEyMCIgZmlsbD0iIzUzNjY1ZiIvPjxyZWN0IHg9IjIyMCIgeT0iODgiIHdpZHRoPSI2MCIgaGVpZ2h0PSI4MCIgZmlsbD0iI2IyNGEzMiIvPjxnIGZpbGw9IiNmZmYiPjxyZWN0IHg9IjUxIiB5PSI4NiIgd2lkdGg9IjE0IiBoZWlnaHQ9IjE0Ii8+PHJlY3QgeD0iODAiIHk9Ijg2IiB3aWR0aD0iMTQiIGhlaWdodD0iMTQiLz48cmVjdCB4PSI1MSIgeT0iMTEzIiB3aWR0aD0iMTQiIGhlaWdodD0iMTQiLz48cmVjdCB4PSI4MCIgeT0iMTEzIiB3aWR0aD0iMTQiIGhlaWdodD0iMTQiLz48cmVjdCB4PSIxNDMiIHk9IjY0IiB3aWR0aD0iMTUiIGhlaWdodD0iMTUiLz48cmVjdCB4PSIxNzQiIHk9IjY0IiB3aWR0aD0iMTUiIGhlaWdodD0iMTUiLz48cmVjdCB4PSIxNDMiIHk9IjkyIiB3aWR0aD0iMTUiIGhlaWdodD0iMTUiLz48cmVjdCB4PSIxNzQiIHk9IjkyIiB3aWR0aD0iMTUiIGhlaWdodD0iMTUiLz48L2c+PC9zdmc+" alt="Edifício público" loading="lazy">
-                <div class="news-item-body">
-                  <span class="news-kicker">POLÍTICA</span>
-                  <h2>Agenda pública reúne novos compromissos e encontros nesta tarde</h2>
-                  <small>Há 1 h · 3 min de leitura</small>
-                </div>
-              </article>
-
-            </div>
-
-            <div class="news-more">Mais notícias · atualizado recentemente</div>
-          </main>
-
-          <textarea id="panicText" aria-hidden="true" tabindex="-1"></textarea>
         `;
 
-        screen.dataset.newsBuilt = "1";
+        screen.dataset.aiBuilt = "1";
 
-        /* Filtro visual das categorias, mantendo a aparência de um portal real. */
-        screen.querySelectorAll("[data-news-filter]").forEach(button => {
-          button.onclick = () => {
-            const filter = button.dataset.newsFilter;
 
-            screen.querySelectorAll("[data-news-filter]").forEach(b =>
-              b.classList.toggle("active", b === button)
+        /*
+         * Estado local do assistente.
+         *
+         * Não usamos servidor nem API externa para o conteúdo
+         * digitado no modo disfarce.
+         */
+        const storageKey =
+          "ep_ai_disguise_chats";
+
+        const activeKey =
+          "ep_ai_disguise_active";
+
+
+        let chats = [];
+
+        try {
+
+          chats =
+            JSON.parse(
+              localStorage.getItem(storageKey) ||
+              "[]"
             );
 
-            screen.querySelectorAll(".news-story").forEach(story => {
-              const category = story.dataset.newsCategory;
-              story.classList.toggle(
-                "news-filter-hidden",
-                filter !== "Todos" && category !== filter
+          if (!Array.isArray(chats)) {
+            chats = [];
+          }
+
+        } catch {
+
+          chats = [];
+        }
+
+
+        let activeId =
+          localStorage.getItem(activeKey);
+
+
+        function makeId() {
+
+          return (
+            Date.now().toString(36) +
+            Math.random()
+              .toString(36)
+              .slice(2, 8)
+          );
+        }
+
+
+        function saveChats() {
+
+          localStorage.setItem(
+            storageKey,
+            JSON.stringify(chats)
+          );
+
+          if (activeId) {
+            localStorage.setItem(
+              activeKey,
+              activeId
+            );
+          }
+        }
+
+
+        function createChat() {
+
+          const chat = {
+            id: makeId(),
+            title: "Nova conversa",
+            messages: [],
+            updatedAt: Date.now()
+          };
+
+          chats.unshift(chat);
+
+          activeId =
+            chat.id;
+
+          saveChats();
+
+          renderHistory();
+
+          renderConversation();
+        }
+
+
+        function getActiveChat() {
+
+          return chats.find(
+            chat =>
+              chat.id === activeId
+          );
+        }
+
+
+        function ensureChat() {
+
+          let chat =
+            getActiveChat();
+
+          if (!chat) {
+
+            chat = {
+              id: makeId(),
+              title: "Nova conversa",
+              messages: [],
+              updatedAt: Date.now()
+            };
+
+            chats.unshift(chat);
+
+            activeId =
+              chat.id;
+
+            saveChats();
+          }
+
+          return chat;
+        }
+
+
+        function escapeText(value) {
+
+          return String(
+            value ?? ""
+          );
+        }
+
+
+        function renderHistory() {
+
+          const history =
+            $("aiHistory");
+
+          if (!history) return;
+
+          history.innerHTML = "";
+
+          chats
+            .slice(0, 12)
+            .forEach(chat => {
+
+              const button =
+                document.createElement(
+                  "button"
+                );
+
+              button.type =
+                "button";
+
+              button.className =
+                "ai-history-item" +
+                (
+                  chat.id === activeId
+                    ? " active"
+                    : ""
+                );
+
+              button.textContent =
+                chat.title ||
+                "Nova conversa";
+
+              button.title =
+                chat.title ||
+                "Nova conversa";
+
+              button.onclick =
+                () => {
+
+                  activeId =
+                    chat.id;
+
+                  saveChats();
+
+                  renderHistory();
+
+                  renderConversation();
+                };
+
+              history.appendChild(
+                button
               );
             });
-          };
-        });
+        }
 
-        /* O menu continua sendo a porta discreta para voltar ao chat privado. */
+
+        function renderConversation() {
+
+          const conversation =
+            $("aiConversation");
+
+          if (!conversation) return;
+
+          conversation.innerHTML = "";
+
+          const chat =
+            ensureChat();
+
+          if (!chat.messages.length) {
+
+            const welcome =
+              document.createElement(
+                "div"
+              );
+
+            welcome.className =
+              "ai-welcome";
+
+            welcome.innerHTML = `
+              <div class="ai-welcome-icon">✦</div>
+              <h1>Como posso ajudar?</h1>
+              <p>
+                Escreva, organize uma ideia, monte um texto
+                ou simplesmente converse.
+              </p>
+
+              <div class="ai-suggestions">
+
+                <button class="ai-suggestion" type="button"
+                  data-ai-suggestion="Organize minhas ideias em tópicos">
+                  Organizar ideias em tópicos
+                </button>
+
+                <button class="ai-suggestion" type="button"
+                  data-ai-suggestion="Faça um resumo deste assunto">
+                  Resumir um assunto
+                </button>
+
+                <button class="ai-suggestion" type="button"
+                  data-ai-suggestion="Crie uma pauta para uma reunião">
+                  Criar uma pauta
+                </button>
+
+                <button class="ai-suggestion" type="button"
+                  data-ai-suggestion="Ajude a melhorar este texto">
+                  Melhorar um texto
+                </button>
+
+              </div>
+            `;
+
+            conversation.appendChild(
+              welcome
+            );
+
+            welcome
+              .querySelectorAll(
+                "[data-ai-suggestion]"
+              )
+              .forEach(
+                button => {
+
+                  button.onclick =
+                    () => {
+
+                      const input =
+                        $("aiInput");
+
+                      if (!input) return;
+
+                      input.value =
+                        button.dataset.aiSuggestion;
+
+                      input.dispatchEvent(
+                        new Event(
+                          "input"
+                        )
+                      );
+
+                      input.focus();
+                    };
+                }
+              );
+
+            return;
+          }
+
+
+          chat.messages.forEach(
+            (message, index) => {
+
+              const row =
+                document.createElement(
+                  "div"
+                );
+
+              row.className =
+                "ai-message " +
+                (
+                  message.role === "user"
+                    ? "user"
+                    : "assistant"
+                );
+
+
+              const wrap =
+                document.createElement(
+                  "div"
+                );
+
+
+              const bubble =
+                document.createElement(
+                  "div"
+                );
+
+              bubble.className =
+                "ai-message-bubble";
+
+              bubble.textContent =
+                escapeText(
+                  message.text
+                );
+
+              wrap.appendChild(
+                bubble
+              );
+
+
+              if (
+                message.role ===
+                "assistant"
+              ) {
+
+                const actions =
+                  document.createElement(
+                    "div"
+                  );
+
+                actions.className =
+                  "ai-message-actions";
+
+
+                const copy =
+                  document.createElement(
+                    "button"
+                  );
+
+                copy.type =
+                  "button";
+
+                copy.className =
+                  "ai-message-action";
+
+                copy.textContent =
+                  "Copiar";
+
+                copy.onclick =
+                  async () => {
+
+                    try {
+
+                      await navigator
+                        .clipboard
+                        ?.writeText(
+                          message.text
+                        );
+
+                      showToast(
+                        "Texto copiado."
+                      );
+
+                    } catch {
+
+                      showToast(
+                        "Não foi possível copiar."
+                      );
+                    }
+                  };
+
+
+                actions.appendChild(
+                  copy
+                );
+
+                wrap.appendChild(
+                  actions
+                );
+
+              } else {
+
+                const actions =
+                  document.createElement(
+                    "div"
+                  );
+
+                actions.className =
+                  "ai-message-actions";
+
+
+                const edit =
+                  document.createElement(
+                    "button"
+                  );
+
+                edit.type =
+                  "button";
+
+                edit.className =
+                  "ai-message-action";
+
+                edit.textContent =
+                  "Editar";
+
+                edit.onclick =
+                  () => {
+
+                    const input =
+                      $("aiInput");
+
+                    if (!input) return;
+
+                    input.value =
+                      message.text;
+
+                    input.focus();
+
+                    input.dispatchEvent(
+                      new Event(
+                        "input"
+                      )
+                    );
+
+                    chat.messages.splice(
+                      index,
+                      1
+                    );
+
+                    saveChats();
+
+                    renderConversation();
+                  };
+
+
+                actions.appendChild(
+                  edit
+                );
+
+                wrap.appendChild(
+                  actions
+                );
+              }
+
+
+              row.appendChild(
+                wrap
+              );
+
+              conversation.appendChild(
+                row
+              );
+            }
+          );
+
+
+          conversation.scrollTop =
+            conversation.scrollHeight;
+        }
+
+
+        function updateComposer() {
+
+          const input =
+            $("aiInput");
+
+          const send =
+            $("aiSend");
+
+          if (!input || !send) return;
+
+          send.disabled =
+            !input.value.trim();
+        }
+
+
+        function autoResizeInput() {
+
+          const input =
+            $("aiInput");
+
+          if (!input) return;
+
+          input.style.height =
+            "auto";
+
+          input.style.height =
+            Math.min(
+              input.scrollHeight,
+              115
+            ) +
+            "px";
+        }
+
+
+        /*
+         * Respostas locais com aparência de assistente.
+         *
+         * O objetivo é manter o modo totalmente funcional
+         * mesmo sem configurar uma API.
+         */
+        function generateLocalReply(text) {
+
+          const normalized =
+            text
+              .toLowerCase()
+              .trim();
+
+
+          if (
+            normalized.includes(
+              "resum"
+            )
+          ) {
+
+            return (
+              "Claro. Envie o texto ou assunto completo e " +
+              "posso organizar os pontos principais em uma " +
+              "estrutura curta e objetiva."
+            );
+          }
+
+
+          if (
+            normalized.includes(
+              "pauta"
+            )
+          ) {
+
+            return (
+              "Posso montar uma pauta. Uma estrutura simples seria:\\n\\n" +
+              "1. Objetivo\\n" +
+              "2. Contexto\\n" +
+              "3. Pontos principais\\n" +
+              "4. Encaminhamentos\\n" +
+              "5. Próximos passos"
+            );
+          }
+
+
+          if (
+            normalized.includes(
+              "organize"
+            ) ||
+            normalized.includes(
+              "organizar"
+            )
+          ) {
+
+            return (
+              "Vamos organizar isso em etapas:\\n\\n" +
+              "• Ideia principal\\n" +
+              "• Informações importantes\\n" +
+              "• Prioridades\\n" +
+              "• Próximas ações\\n\\n" +
+              "Se quiser, escreva o conteúdo e eu reorganizo."
+            );
+          }
+
+
+          if (
+            normalized.includes(
+              "melhor"
+            ) ||
+            normalized.includes(
+              "texto"
+            )
+          ) {
+
+            return (
+              "Posso melhorar o texto preservando sua ideia. " +
+              "Cole o conteúdo completo e posso trabalhar " +
+              "clareza, concisão, organização e tom."
+            );
+          }
+
+
+          if (
+            /^(oi|olá|ola|bom dia|boa tarde|boa noite)\b/.test(
+              normalized
+            )
+          ) {
+
+            return (
+              "Olá! Estou aqui para ajudar. " +
+              "Você pode escrever uma ideia, rascunho ou pergunta."
+            );
+          }
+
+
+          if (
+            normalized.endsWith("?")
+          ) {
+
+            return (
+              "Entendi. Posso ajudar a organizar essa questão " +
+              "e transformar a ideia em um texto ou plano mais claro."
+            );
+          }
+
+
+          return (
+            "Entendi. Posso ajudar a desenvolver essa ideia, " +
+            "organizar o conteúdo ou transformar o rascunho " +
+            "em um texto mais claro."
+          );
+        }
+
+
+        async function sendMessage() {
+
+          const input =
+            $("aiInput");
+
+          if (!input) return;
+
+          const text =
+            input.value.trim();
+
+          if (!text) return;
+
+
+          const chat =
+            ensureChat();
+
+
+          chat.messages.push({
+            role: "user",
+            text,
+            at: Date.now()
+          });
+
+
+          if (
+            chat.title ===
+              "Nova conversa" ||
+            !chat.title
+          ) {
+
+            chat.title =
+              text.length > 34
+                ? text.slice(0, 34) + "…"
+                : text;
+          }
+
+
+          chat.updatedAt =
+            Date.now();
+
+
+          input.value =
+            "";
+
+          updateComposer();
+
+          autoResizeInput();
+
+          saveChats();
+
+          renderHistory();
+
+          renderConversation();
+
+
+          /*
+           * Pequeno intervalo para reproduzir a sensação
+           * de processamento de um assistente.
+           */
+          const conversation =
+            $("aiConversation");
+
+          const typingRow =
+            document.createElement(
+              "div"
+            );
+
+          typingRow.className =
+            "ai-message assistant";
+
+          typingRow.innerHTML = `
+            <div class="ai-message-bubble">
+              <span class="ai-typing">
+                <span></span><span></span><span></span>
+              </span>
+            </div>
+          `;
+
+          conversation?.appendChild(
+            typingRow
+          );
+
+          if (conversation) {
+            conversation.scrollTop =
+              conversation.scrollHeight;
+          }
+
+
+          await new Promise(
+            resolve =>
+              setTimeout(
+                resolve,
+                450
+              )
+          );
+
+
+          typingRow.remove();
+
+
+          const reply =
+            generateLocalReply(
+              text
+            );
+
+
+          chat.messages.push({
+            role: "assistant",
+            text: reply,
+            at: Date.now()
+          });
+
+
+          chat.updatedAt =
+            Date.now();
+
+
+          saveChats();
+
+          renderHistory();
+
+          renderConversation();
+        }
+
+
+        function startNewChat() {
+
+          createChat();
+
+          $("aiInput")
+            ?.focus();
+        }
+
+
+        /*
+         * Eventos.
+         */
+        $("aiNewChat")
+          ?.addEventListener(
+            "click",
+            startNewChat
+          );
+
+        $("aiNewChatTop")
+          ?.addEventListener(
+            "click",
+            startNewChat
+          );
+
+
+        const input =
+          $("aiInput");
+
+        input?.addEventListener(
+          "input",
+          () => {
+
+            updateComposer();
+
+            autoResizeInput();
+          }
+        );
+
+
+        input?.addEventListener(
+          "keydown",
+          event => {
+
+            if (
+              event.key === "Enter" &&
+              !event.shiftKey
+            ) {
+
+              event.preventDefault();
+
+              if (
+                !$("aiSend")?.disabled
+              ) {
+                sendMessage();
+              }
+            }
+          }
+        );
+
+
+        $("aiSend")
+          ?.addEventListener(
+            "click",
+            sendMessage
+          );
+
+
+        /*
+         * O menu superior continua sendo a porta discreta
+         * para retornar ao chat privado.
+         */
+        $("panicMenuButton").onclick =
+          authenticatePanicExit;
+
+
+        /*
+         * Recupera a conversa anterior ou cria uma nova.
+         */
+        if (!getActiveChat()) {
+
+          if (!chats.length) {
+
+            createChat();
+
+          } else {
+
+            activeId =
+              chats[0].id;
+
+            saveChats();
+
+            renderHistory();
+
+            renderConversation();
+          }
+
+        } else {
+
+          renderHistory();
+
+          renderConversation();
+        }
+
+
+        updateComposer();
+
+        autoResizeInput();
       }
 
-      const panicMenuButton = $("panicMenuButton");
 
-      if (panicMenuButton) {
-        panicMenuButton.onclick = authenticatePanicExit;
+      /*
+       * O botão de menu precisa continuar funcionando também
+       * quando o modo já tiver sido construído anteriormente.
+       */
+      const menu =
+        $("panicMenuButton");
+
+      if (menu) {
+        menu.onclick =
+          authenticatePanicExit;
       }
+
+
+      /*
+       * Ao reabrir o modo, o foco não é colocado automaticamente
+       * no campo. Isso mantém o comportamento natural de uma
+       * página/aplicativo comum.
+       */
     }
-
 
     function leavePanic() {
 
