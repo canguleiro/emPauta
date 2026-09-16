@@ -1,4 +1,4 @@
-const CACHE_VERSION = "criart-v9";
+const CACHE_VERSION = "criart-v10";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 
 const STATIC_ASSETS = [
@@ -33,10 +33,6 @@ self.addEventListener("activate", event => {
   );
 });
 
-/*
- * Clique em uma notificação: retorna para o aplicativo já aberto
- * ou abre uma nova janela/aba quando necessário.
- */
 self.addEventListener("notificationclick", event => {
   event.notification.close();
 
@@ -47,8 +43,12 @@ self.addEventListener("notificationclick", event => {
 
   event.waitUntil(
     self.clients
-      .matchAll({ type: "window", includeUncontrolled: true })
+      .matchAll({
+        type: "window",
+        includeUncontrolled: true
+      })
       .then(clients => {
+
         for (const client of clients) {
           if ("focus" in client) {
             return client.focus();
@@ -56,7 +56,9 @@ self.addEventListener("notificationclick", event => {
         }
 
         if (self.clients.openWindow) {
-          return self.clients.openWindow(targetUrl);
+          return self.clients.openWindow(
+            targetUrl
+          );
         }
       })
   );
@@ -66,13 +68,10 @@ self.addEventListener("fetch", event => {
   const request = event.request;
   const url = new URL(request.url);
 
-  // Só tratamos requisições do próprio CrIArt.
   if (url.origin !== location.origin) {
     return;
   }
 
-  // Nunca cachear HTML nem JavaScript do aplicativo.
-  // Isso garante que Ctrl+R receba sempre a versão atual.
   if (
     request.method !== "GET" ||
     request.destination === "script" ||
