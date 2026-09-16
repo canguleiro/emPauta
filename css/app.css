@@ -1653,6 +1653,10 @@ header .actions{
   transform:scale(.96);
 }
 
+#panicScreen .ai-settings-button{
+  font-size:20px;
+}
+
 #panicScreen .ai-layout{
   flex:1;
   min-height:0;
@@ -2269,14 +2273,6 @@ header .actions{
   opacity:1;
 }
 
-#panicScreen .ai-delete-chat-button{
-  font-size:18px;
-  opacity:.82;
-}
-
-#panicScreen .ai-delete-chat-button:hover{
-  background:rgba(255,255,255,.12);
-}
 
 
 /* =========================================================
@@ -2316,7 +2312,4 @@ header .actions{
     height:35px;
   }
 
-  #panicScreen .ai-delete-chat-button{
-    font-size:17px;
-  }
 }
