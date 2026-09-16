@@ -2,7 +2,7 @@
       initializeApp
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 
-    /* V20 — CrIArt como modo disfarce automático somente no mobile; desktop abre direto no chat. */
+    /* V22 — CrIArt como modo disfarce automático somente no mobile; desktop abre direto no chat. */
 
     import {
       getAuth,
@@ -39,6 +39,13 @@
       deleteObject
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
+    import {
+      getMessaging,
+      getToken,
+      deleteToken,
+      isSupported as messagingSupported
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-messaging.js";
+
 
     /* =========================================================
        FIREBASE
@@ -57,6 +64,11 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
     const storage = getStorage(app);
+
+    let messaging = null;
+    let messagingSupportReady = false;
+    const FCM_VAPID_KEY = ""; // Preencher com a chave pública VAPID do Firebase Console.
+    let pushToken = localStorage.getItem("ep_fcm_token") || "";
 
     const ROOM_ID = "private-room";
 
@@ -154,6 +166,15 @@
     // Notificações do sistema (somente mobile).
     let notificationInitialized = false;
     let lastNotifiedMessageIds = new Set();
+
+    let notificationSettings = {
+      enabled: localStorage.getItem("ep_notifications_enabled") !== "0",
+      sound: localStorage.getItem("ep_notification_sound") !== "0",
+      vibration: localStorage.getItem("ep_notification_vibration") !== "0",
+      preview: localStorage.getItem("ep_notification_preview") === "1"
+    };
+
+    let audioContext = null;
 
     let sessionInitPromise = null;
     let sessionInitResolve = null;
@@ -781,7 +802,10 @@
 
       window.addEventListener(
         ev,
-        updateActivity,
+        event => {
+          if (notificationSettings.sound && event.isTrusted) primeNotificationAudio();
+          updateActivity(event);
+        },
         {
           passive: true
         }
@@ -1005,7 +1029,8 @@
 
               authenticatorSelection: {
                 authenticatorAttachment: "platform",
-                residentKey: "preferred",
+                residentKey: "required",
+                requireResidentKey: true,
                 userVerification: "required"
               },
 
@@ -1081,13 +1106,9 @@
 
               rpId: location.hostname,
 
-              allowCredentials: [
-                {
-                  type: "public-key",
-                  id: fromBase64url(id)
-                }
-              ],
-
+              // Credencial descobrível: mais compatível com PWA mobile.
+              // O navegador escolhe a passkey do domínio e aciona
+              // a biometria nativa do aparelho.
               userVerification: "required",
               timeout: 60000
             }
@@ -1103,9 +1124,15 @@
         console.warn("WebAuthn/biometria:", e);
 
         if (e?.name === "NotAllowedError") {
-          showToast("A autenticação biométrica foi cancelada.");
+          showToast("A autenticação biométrica foi cancelada ou não encontrou uma passkey compatível.");
+        } else if (e?.name === "InvalidStateError") {
+          showToast("A biometria deste dispositivo precisa ser cadastrada novamente.");
+          localStorage.removeItem("ep_biometric_cred");
+          updateBiometricButton();
+        } else if (e?.name === "SecurityError") {
+          showToast("O navegador bloqueou a biometria para este endereço.");
         } else {
-          showToast("Biometria não autorizada. Use o PIN.");
+          showToast(`Biometria não autorizada (${e?.name || "erro"}). Use o PIN.`);
         }
       }
     }
@@ -5569,17 +5596,101 @@
 
 
     /* =========================================================
-       NOTIFICAÇÕES MOBILE
+       NOTIFICAÇÕES / SONS / PUSH MOBILE
     ========================================================= */
 
     function notificationsEnabled() {
-      return localStorage.getItem("ep_safe_notifications") !== "0";
+      return notificationSettings.enabled;
+    }
+
+    function saveNotificationSettingsToIDB() {
+      try {
+        const request = indexedDB.open("criart-settings", 1);
+        request.onupgradeneeded = () => {
+          if (!request.result.objectStoreNames.contains("settings")) {
+            request.result.createObjectStore("settings");
+          }
+        };
+        request.onsuccess = () => {
+          const dbi = request.result;
+          const tx = dbi.transaction("settings", "readwrite");
+          tx.objectStore("settings").put(notificationSettings, "notifications");
+        };
+      } catch (e) {}
+    }
+
+    function saveNotificationSettings() {
+      localStorage.setItem("ep_notifications_enabled", notificationSettings.enabled ? "1" : "0");
+      localStorage.setItem("ep_notification_sound", notificationSettings.sound ? "1" : "0");
+      localStorage.setItem("ep_notification_vibration", notificationSettings.vibration ? "1" : "0");
+      localStorage.setItem("ep_notification_preview", notificationSettings.preview ? "1" : "0");
+      // Mantém compatibilidade com a opção antiga.
+      localStorage.setItem("ep_safe_notifications", notificationSettings.enabled ? "1" : "0");
+      saveNotificationSettingsToIDB();
+    }
+
+    function loadNotificationSettings() {
+      notificationSettings = {
+        enabled: localStorage.getItem("ep_notifications_enabled") !== "0" && localStorage.getItem("ep_safe_notifications") !== "0",
+        sound: localStorage.getItem("ep_notification_sound") !== "0",
+        vibration: localStorage.getItem("ep_notification_vibration") !== "0",
+        preview: localStorage.getItem("ep_notification_preview") === "1"
+      };
+      saveNotificationSettings();
+    }
+
+    function ensureAudioContext() {
+      try {
+        if (!audioContext) {
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioContext.state === "suspended") {
+          audioContext.resume().catch(() => {});
+        }
+        return audioContext;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function primeNotificationAudio() {
+      const ctx = ensureAudioContext();
+      if (!ctx) return;
+      try {
+        const gain = ctx.createGain();
+        gain.gain.value = 0;
+        gain.connect(ctx.destination);
+        const osc = ctx.createOscillator();
+        osc.connect(gain);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.01);
+      } catch (e) {}
+    }
+
+    function playNotificationSound() {
+      if (!notificationSettings.sound) return;
+      const ctx = ensureAudioContext();
+      if (!ctx) return;
+
+      try {
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, now);
+        osc.frequency.setValueAtTime(660, now + 0.09);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.08, now + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.2);
+      } catch (e) {}
     }
 
     async function requestMobileNotifications() {
-      if (!isMobileLayout() || !notificationsEnabled()) {
-        return "denied";
-      }
+      if (!isMobileLayout() || !notificationsEnabled()) return "denied";
 
       if (!("Notification" in window)) {
         showToast("Este navegador não oferece notificações.");
@@ -5587,19 +5698,79 @@
       }
 
       try {
+        primeNotificationAudio();
+
         if (Notification.permission === "default") {
           const permission = await Notification.requestPermission();
           if (permission !== "granted") {
             showToast("Notificações não autorizadas.");
+            return permission;
           }
-          return permission;
         }
 
+        await registerPushForCurrentDevice();
         return Notification.permission;
       } catch (e) {
-        console.warn("Permissão de notificações:", e);
-        showToast("Não foi possível ativar as notificações.");
+        console.warn("Permissão/push:", e);
+        showToast("Não foi possível ativar as notificações neste dispositivo.");
         return "denied";
+      }
+    }
+
+    async function registerPushForCurrentDevice() {
+      if (!isMobileLayout() || Notification.permission !== "granted") return null;
+      if (!(await messagingSupported().catch(() => false))) return null;
+
+      try {
+        if (!messaging) messaging = getMessaging(app);
+        messagingSupportReady = true;
+
+        const registration = await navigator.serviceWorker?.ready;
+        if (!registration) return null;
+
+        const options = { serviceWorkerRegistration: registration };
+        if (FCM_VAPID_KEY) options.vapidKey = FCM_VAPID_KEY;
+
+        const token = await getToken(messaging, options);
+        if (!token) return null;
+
+        pushToken = token;
+        localStorage.setItem("ep_fcm_token", token);
+
+        if (me?.uid) {
+          await setDoc(
+            doc(db, "private", ROOM_ID, "pushTokens", me.uid),
+            {
+              uid: me.uid,
+              token,
+              platform: "web-mobile",
+              updatedAt: serverTimestamp()
+            },
+            { merge: true }
+          ).catch(err => console.warn("Token FCM/Firestore:", err));
+        }
+
+        return token;
+      } catch (e) {
+        console.warn("Registro FCM:", e);
+        return null;
+      }
+    }
+
+    async function unregisterPushForCurrentDevice() {
+      try {
+        if (messaging) {
+          await deleteToken(messaging).catch(() => {});
+        }
+      } catch (e) {}
+
+      pushToken = "";
+      localStorage.removeItem("ep_fcm_token");
+
+      if (me?.uid) {
+        await deleteDoc(
+          doc(db, "private", ROOM_ID, "pushTokens", me.uid)
+        ).catch(() => {});
       }
     }
 
@@ -5618,17 +5789,23 @@
         }
       }
 
-      const title = message.senderName || message.sender || "Nova mensagem";
-      const body = String(message.text).slice(0, 140);
+      const sender = message.senderName || message.sender || "Nova mensagem";
+      const body = notificationSettings.preview
+        ? String(message.text).slice(0, 140)
+        : "Você recebeu uma nova mensagem.";
+
+      playNotificationSound();
 
       try {
         const registration = await navigator.serviceWorker?.ready;
 
         if (registration?.showNotification) {
-          await registration.showNotification("CrIArt", {
-            body: `${title}: ${body}`,
+          await registration.showNotification(sender, {
+            body,
             tag: id ? `criart-${id}` : "criart-message",
             renotify: true,
+            silent: !notificationSettings.sound,
+            vibrate: notificationSettings.vibration ? [100, 50, 100] : [],
             icon: "./icon-criart-192.png",
             badge: "./icon-criart-192.png",
             data: { url: "./" }
@@ -5636,7 +5813,10 @@
           return;
         }
 
-        new Notification("CrIArt", { body: `${title}: ${body}` });
+        new Notification(sender, {
+          body,
+          silent: !notificationSettings.sound
+        });
       } catch (e) {
         console.warn("Notificação mobile:", e);
       }
@@ -5646,14 +5826,39 @@
       if (notificationInitialized) return;
       notificationInitialized = true;
 
+      loadNotificationSettings();
+
       if (!isMobileLayout() || !("Notification" in window)) return;
 
       const safe = $("safeNotifications");
-      if (safe) {
-        safe.checked = notificationsEnabled();
-      }
+      if (safe) safe.checked = notificationSettings.enabled;
+
+      const sound = $("notificationSound");
+      if (sound) sound.checked = notificationSettings.sound;
+
+      const vibration = $("notificationVibration");
+      if (vibration) vibration.checked = notificationSettings.vibration;
+
+      const preview = $("notificationPreview");
+      if (preview) preview.checked = notificationSettings.preview;
     }
 
+    async function initPushMessaging() {
+      if (!isMobileLayout()) return;
+      loadNotificationSettings();
+      if (!notificationSettings.enabled) return;
+      if (!("Notification" in window)) return;
+
+      try {
+        if ((await messagingSupported().catch(() => false)) && Notification.permission === "granted") {
+          if (!messaging) messaging = getMessaging(app);
+          messagingSupportReady = true;
+          await registerPushForCurrentDevice();
+        }
+      } catch (e) {
+        console.warn("FCM inicialização:", e);
+      }
+    }
 
     /* =========================================================
        LISTENER DAS MENSAGENS
@@ -6391,6 +6596,7 @@
       setupPinpad();
       setupBiometricButton();
       initMobileNotifications();
+      initPushMessaging();
 
 
       /*
@@ -6979,148 +7185,10 @@
     ========================================================= */
 
     if ($("settingsBtn")) {
+      $("settingsBtn").onclick = () => {
+        $("settingsModal")?.classList.remove("hidden");
 
-      $("settingsBtn").onclick =
-        () => {
-
-          $("settingsModal")
-            ?.classList
-            .remove("hidden");
-
-
-          if ($("autoLock")) {
-
-            $("autoLock").checked =
-              localStorage.getItem(
-                "ep_auto_lock"
-              ) === "1";
-          }
-
-
-          if ($("safeNotifications")) {
-
-            $("safeNotifications").checked =
-              localStorage.getItem(
-                "ep_safe_notifications"
-              ) !== "0";
-
-            /*
-             * O clique em Configurações é uma ativação do usuário.
-             * Quando a permissão ainda estiver como "default", podemos
-             * solicitar a autorização do sistema aqui sem depender de
-             * uma chamada automática bloqueada pelo navegador mobile.
-             */
-            if (
-              isMobileLayout() &&
-              $("safeNotifications").checked &&
-              "Notification" in window &&
-              Notification.permission === "default"
-            ) {
-              requestMobileNotifications();
-            }
-          }
-
-
-          if ($("ttl")) {
-
-            $("ttl").value =
-              String(
-                ttlSeconds
-              );
-          }
-        };
-    }
-
-
-    if ($("closeSettings")) {
-
-      $("closeSettings").onclick =
-        () =>
-          $("settingsModal")
-            ?.classList
-            .add("hidden");
-    }
-
-
-    /* =========================================================
-       LIMPAR TODAS AS MENSAGENS
-    ========================================================= */
-
-    if ($("clearMessagesBtn")) {
-
-      $("clearMessagesBtn").onclick =
-        async () => {
-
-          /*
-           * Fecha a janela antes de iniciar a operação.
-           */
-
-          $("settingsModal")
-            ?.classList
-            .add("hidden");
-
-          await clearAllMessages();
-        };
-    }
-
-
-    if ($("autoLock")) {
-
-      $("autoLock").onchange =
-        e =>
-          localStorage.setItem(
-            "ep_auto_lock",
-            e.target.checked
-              ? "1"
-              : "0"
-          );
-    }
-
-
-    if ($("safeNotifications")) {
-
-      $("safeNotifications").onchange =
-        async e => {
-          const enabled = e.target.checked;
-
-          localStorage.setItem(
-            "ep_safe_notifications",
-            enabled ? "1" : "0"
-          );
-
-          if (enabled && isMobileLayout()) {
-            const permission = await requestMobileNotifications();
-            if (permission !== "granted") {
-              e.target.checked = false;
-              localStorage.setItem("ep_safe_notifications", "0");
-            }
-          }
-        };
-    }
-
-
-    if ($("ttl")) {
-
-      $("ttl").onchange =
-        e => {
-
-          ttlSeconds =
-            Number(
-              e.target.value
-            );
-
-
-          localStorage.setItem(
-            "ep_ttl",
-            String(
-              ttlSeconds
-            )
-          );
-        };
-    }
-
-
-    /* =========================================================
+        /* =========================================================
        ESCONDER AGORA / MODO DISFARCE
     ========================================================= */
 
