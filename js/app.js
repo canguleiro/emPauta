@@ -883,8 +883,42 @@
 
 
     /* =========================================================
-       BIOMETRIA
+       BIOMETRIA / WEBAUTHN
     ========================================================= */
+
+    function isMobileLayout() {
+      return window.matchMedia("(max-width: 767px)").matches;
+    }
+
+
+    async function biometricAvailable() {
+
+      if (!isMobileLayout()) return false;
+
+      if (!window.isSecureContext) return false;
+
+      if (!window.PublicKeyCredential || !navigator.credentials) {
+        return false;
+      }
+
+      try {
+        if (
+          typeof PublicKeyCredential
+            .isUserVerifyingPlatformAuthenticatorAvailable ===
+          "function"
+        ) {
+          return await PublicKeyCredential
+            .isUserVerifyingPlatformAuthenticatorAvailable();
+        }
+
+        return true;
+
+      } catch (e) {
+        console.warn("Verificação de biometria:", e);
+        return false;
+      }
+    }
+
 
     function base64url(bytes) {
       return b64(bytes)
@@ -900,9 +934,7 @@
         .replace(/-/g, "+")
         .replace(/_/g, "/");
 
-      while (
-        s.length % 4
-      ) {
+      while (s.length % 4) {
         s += "=";
       }
 
@@ -912,12 +944,15 @@
 
     async function registerBiometric() {
 
-      if (
-        !window.PublicKeyCredential ||
-        !navigator.credentials
-      ) {
+      if (!isMobileLayout()) {
+        return;
+      }
+
+      const available = await biometricAvailable();
+
+      if (!available) {
         showToast(
-          "A biometria do navegador não está disponível neste dispositivo."
+          "A biometria não está disponível neste dispositivo. Use o PIN."
         );
         return;
       }
@@ -933,7 +968,7 @@
                 ),
 
               rp: {
-                name: "Em Pauta",
+                name: "CrIArt",
                 id: location.hostname
               },
 
@@ -947,7 +982,7 @@
                   myNick || "usuario",
 
                 displayName:
-                  myNick || "Usuário"
+                  myNick || "Usuário CrIArt"
               },
 
               pubKeyCredParams: [
@@ -962,73 +997,68 @@
               ],
 
               authenticatorSelection: {
-                authenticatorAttachment:
-                  "platform",
-
-                residentKey:
-                  "preferred",
-
-                userVerification:
-                  "required"
+                authenticatorAttachment: "platform",
+                residentKey: "preferred",
+                userVerification: "required"
               },
 
               timeout: 60000,
-
               attestation: "none"
             }
           });
 
-        if (credential) {
-
-          localStorage.setItem(
-            "ep_biometric_cred",
-            base64url(
-              credential.rawId
-            )
-          );
-
-          showToast(
-            "Biometria ativada neste dispositivo."
-          );
-
-          if ($("biometricBtn")) {
-            $("biometricBtn").textContent =
-              "Desbloquear com biometria";
-          }
-
-          unlockApp();
+        if (!credential) {
+          showToast("Não foi possível cadastrar a biometria.");
+          return;
         }
+
+        localStorage.setItem(
+          "ep_biometric_cred",
+          base64url(credential.rawId)
+        );
+
+        showToast(
+          "Biometria ativada neste dispositivo."
+        );
+
+        updateBiometricButton();
+        unlockApp();
 
       } catch (e) {
 
         console.warn("WebAuthn/biometria:", e);
 
-        showToast(
-          e?.name === "NotAllowedError"
-            ? "A autenticação biométrica foi cancelada."
-            : "Não foi possível ativar a biometria neste dispositivo."
-        );
+        if (e?.name === "NotAllowedError") {
+          showToast("A autenticação biométrica foi cancelada.");
+        } else if (e?.name === "SecurityError") {
+          showToast("O navegador bloqueou a biometria neste endereço.");
+        } else {
+          showToast("Não foi possível ativar a biometria neste dispositivo.");
+        }
       }
     }
 
 
     async function unlockWithBiometric() {
 
+      if (!isMobileLayout()) {
+        return;
+      }
+
       const id =
-        localStorage.getItem(
-          "ep_biometric_cred"
-        );
+        localStorage.getItem("ep_biometric_cred");
 
-      if (
-        !id ||
-        !window.PublicKeyCredential ||
-        !navigator.credentials
-      ) {
+      if (!id) {
+        await registerBiometric();
+        return;
+      }
 
+      const available = await biometricAvailable();
+
+      if (!available) {
         showToast(
-          "Biometria ainda não foi configurada."
+          "A biometria não está disponível. Use o PIN."
         );
-
         return;
       }
 
@@ -1042,36 +1072,85 @@
                   new Uint8Array(32)
                 ),
 
-              rpId:
-                location.hostname,
+              rpId: location.hostname,
 
               allowCredentials: [
                 {
                   type: "public-key",
-                  id:
-                    fromBase64url(id)
+                  id: fromBase64url(id)
                 }
               ],
 
-              userVerification:
-                "required",
-
+              userVerification: "required",
               timeout: 60000
             }
           });
 
         if (credential) {
           unlockApp();
+          showToast("Acesso autorizado.");
         }
 
       } catch (e) {
 
-        console.warn(e);
+        console.warn("WebAuthn/biometria:", e);
 
-        showToast(
-          "Biometria não autorizada."
-        );
+        if (e?.name === "NotAllowedError") {
+          showToast("A autenticação biométrica foi cancelada.");
+        } else {
+          showToast("Biometria não autorizada. Use o PIN.");
+        }
       }
+    }
+
+
+    function updateBiometricButton() {
+
+      const button = $("biometricBtn");
+
+      if (!button) return;
+
+      if (!isMobileLayout()) {
+        button.classList.add("desktop-only-hidden");
+        button.setAttribute("aria-hidden", "true");
+        return;
+      }
+
+      button.classList.remove("desktop-only-hidden");
+      button.removeAttribute("aria-hidden");
+
+      button.textContent =
+        localStorage.getItem("ep_biometric_cred")
+          ? "Desbloquear com biometria"
+          : "Usar biometria neste dispositivo";
+    }
+
+
+    function setupBiometricButton() {
+
+      const button = $("biometricBtn");
+
+      if (!button) return;
+
+      /*
+       * O botão pode ser criado depois da execução inicial do módulo.
+       * Por isso o listener é instalado aqui, após a sessão e o DOM
+       * estarem prontos, em vez de depender de um if executado cedo.
+       */
+      button.onclick = async () => {
+
+        if (!isMobileLayout()) {
+          return;
+        }
+
+        if (localStorage.getItem("ep_biometric_cred")) {
+          await unlockWithBiometric();
+        } else {
+          await registerBiometric();
+        }
+      };
+
+      updateBiometricButton();
     }
 
 
@@ -1256,17 +1335,6 @@
     }
 
 
-    if ($("biometricBtn")) {
-
-      $("biometricBtn").onclick =
-        () =>
-          localStorage.getItem(
-            "ep_biometric_cred"
-          )
-            ? unlockWithBiometric()
-            : registerBiometric();
-    }
-
 
     /* =========================================================
        MODO DISFARCE / PÂNICO
@@ -1280,54 +1348,67 @@
      */
     async function authenticatePanicExit() {
 
-      const biometricId = localStorage.getItem("ep_biometric_cred");
+      /*
+       * O modo disfarce existe como camada mobile. No desktop,
+       * não há autenticação biométrica para entrar no chat.
+       */
+      if (!isMobileLayout()) {
+        leavePanic();
+        return;
+      }
 
-      if (biometricId && window.PublicKeyCredential && navigator.credentials) {
+      const biometricId =
+        localStorage.getItem("ep_biometric_cred");
 
-        try {
+      if (biometricId) {
 
-          const credential = await navigator.credentials.get({
-            publicKey: {
-              challenge: crypto.getRandomValues(new Uint8Array(32)),
-              rpId: location.hostname,
-              allowCredentials: [{
-                type: "public-key",
-                id: fromBase64url(biometricId)
-              }],
-              userVerification: "required",
-              timeout: 60000
+        const available = await biometricAvailable();
+
+        if (available) {
+
+          try {
+
+            const credential = await navigator.credentials.get({
+              publicKey: {
+                challenge:
+                  crypto.getRandomValues(
+                    new Uint8Array(32)
+                  ),
+
+                rpId: location.hostname,
+
+                allowCredentials: [{
+                  type: "public-key",
+                  id: fromBase64url(biometricId)
+                }],
+
+                userVerification: "required",
+                timeout: 60000
+              }
+            });
+
+            if (credential) {
+              leavePanic();
+              unlockApp();
+              showToast("Acesso autorizado.");
             }
-          });
 
-          if (credential) {
-            leavePanic();
-            unlockApp();
-            showToast("Acesso autorizado.");
-          }
+            return;
 
-          return;
+          } catch (e) {
 
-        } catch (e) {
+            console.warn("Saída biométrica do modo disfarce:", e);
 
-          console.warn("Saída biométrica do modo disfarce:", e);
-
-          /*
-           * Cancelamento/falha da biometria não revela o chat.
-           * O usuário pode continuar pelo PIN.
-           */
-          if (e?.name !== "NotAllowedError") {
-            showToast("Biometria indisponível. Use o PIN.");
+            if (e?.name !== "NotAllowedError") {
+              showToast("Biometria indisponível. Use o PIN.");
+            }
           }
         }
       }
 
       /*
-       * Sem biometria ou após falha: sai visualmente do
-       * disfarce somente para exibir a proteção local.
-       *
-       * Se já existe PIN, mostramos o PIN.
-       * Se ainda não existe PIN, mostramos o mesmo teclado
-       * para que o usuário cadastre a senha deste dispositivo.
+       * Falha, cancelamento ou ausência de biometria:
+       * mantém a proteção e apresenta o PIN.
        */
       leavePanic();
 
@@ -1341,7 +1422,6 @@
         showToast("Crie o PIN deste dispositivo para continuar.");
       }
     }
-
 
     function enterPanic() {
 
@@ -6179,17 +6259,7 @@
       await loadPin();
 
       setupPinpad();
-
-
-      if ($("biometricBtn")) {
-
-        $("biometricBtn").textContent =
-          localStorage.getItem(
-            "ep_biometric_cred"
-          )
-            ? "Desbloquear com biometria"
-            : "Usar biometria neste dispositivo";
-      }
+      setupBiometricButton();
 
 
       /*
