@@ -2,7 +2,7 @@
       initializeApp
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 
-    /* V17 — CrIArt como modo disfarce automático somente no mobile; desktop abre direto no chat. */
+    /* V19 — CrIArt como modo disfarce automático somente no mobile; desktop abre direto no chat. */
 
     import {
       getAuth,
@@ -1385,6 +1385,15 @@
               </div>
 
               <div class="ai-top-actions">
+
+                <button
+                  id="aiHistoryToggle"
+                  class="ai-icon-button ai-history-toggle"
+                  type="button"
+                  title="Abrir conversas"
+                  aria-label="Abrir conversas"
+                >▤</button>
+
                 <button
                   id="aiChatModeTop"
                   class="ai-icon-button ai-settings-button"
@@ -1398,7 +1407,25 @@
 
             <div class="ai-layout">
 
-              <aside class="ai-sidebar">
+              <div
+                id="aiSidebarBackdrop"
+                class="ai-sidebar-backdrop"
+                aria-hidden="true"
+              ></div>
+
+              <aside class="ai-sidebar" id="aiSidebar">
+
+                <div class="ai-sidebar-head">
+                  <div class="ai-sidebar-title">Conversas</div>
+
+                  <button
+                    id="aiSidebarClose"
+                    class="ai-sidebar-close"
+                    type="button"
+                    title="Fechar conversas"
+                    aria-label="Fechar conversas"
+                  >×</button>
+                </div>
 
                 <button
                   id="aiNewChat"
@@ -2264,6 +2291,117 @@
           ?.addEventListener(
             "click",
             authenticatePanicExit
+          );
+
+
+        /*
+         * No mobile, a barra lateral funciona como um drawer.
+         * No desktop ela permanece visível normalmente.
+         */
+        const aiSidebar =
+          $("aiSidebar");
+
+        const aiSidebarBackdrop =
+          $("aiSidebarBackdrop");
+
+        const aiHistoryToggle =
+          $("aiHistoryToggle");
+
+        const aiSidebarClose =
+          $("aiSidebarClose");
+
+
+        function openAiSidebar() {
+
+          if (!aiSidebar) return;
+
+          aiSidebar.classList.add("open");
+
+          aiSidebarBackdrop
+            ?.classList
+            .add("open");
+
+          aiSidebarBackdrop
+            ?.setAttribute(
+              "aria-hidden",
+              "false"
+            );
+        }
+
+
+        function closeAiSidebar() {
+
+          if (!aiSidebar) return;
+
+          aiSidebar.classList.remove("open");
+
+          aiSidebarBackdrop
+            ?.classList
+            .remove("open");
+
+          aiSidebarBackdrop
+            ?.setAttribute(
+              "aria-hidden",
+              "true"
+            );
+        }
+
+
+        aiHistoryToggle
+          ?.addEventListener(
+            "click",
+            () => {
+
+              if (
+                aiSidebar?.classList.contains("open")
+              ) {
+                closeAiSidebar();
+              } else {
+                openAiSidebar();
+              }
+
+            }
+          );
+
+
+        aiSidebarClose
+          ?.addEventListener(
+            "click",
+            closeAiSidebar
+          );
+
+
+        aiSidebarBackdrop
+          ?.addEventListener(
+            "click",
+            closeAiSidebar
+          );
+
+
+        document.addEventListener(
+          "keydown",
+          event => {
+
+            if (
+              event.key === "Escape" &&
+              aiSidebar?.classList.contains("open")
+            ) {
+              closeAiSidebar();
+            }
+
+          }
+        );
+
+
+        $("aiNewChat")
+          ?.addEventListener(
+            "click",
+            () => {
+
+              startNewChat();
+              closeAiSidebar();
+
+            }
           );
 
 
@@ -6052,7 +6190,7 @@
 
 
       /*
-       * MODO DISFARCE RESPONSIVO
+       * MODO DISFARCE RESPONSIVO — V19
        *
        * MOBILE:
        * A aplicação sempre abre no portal de notícias.
