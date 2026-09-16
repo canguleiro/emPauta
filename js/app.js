@@ -151,6 +151,10 @@
     let messagesReady = false;
     let statusReady = false;
 
+    // Notificações do sistema (somente mobile).
+    let notificationInitialized = false;
+    let lastNotifiedMessageIds = new Set();
+
     let sessionInitPromise = null;
     let sessionInitResolve = null;
 
@@ -948,12 +952,15 @@
         return;
       }
 
-      const available = await biometricAvailable();
-
-      if (!available) {
-        showToast(
-          "A biometria não está disponível neste dispositivo. Use o PIN."
-        );
+      /*
+       * IMPORTANTE: não fazemos await antes de credentials.create().
+       * Em vários navegadores mobile, o WebAuthn exige que create()
+       * permaneça dentro da ativação do gesto do usuário. Um await
+       * anterior pode fazer o navegador perder essa ativação e o toque
+       * aparentar não fazer nada.
+       */
+      if (!window.isSecureContext || !window.PublicKeyCredential || !navigator.credentials) {
+        showToast("A biometria não está disponível neste dispositivo. Use o PIN.");
         return;
       }
 
@@ -1053,12 +1060,12 @@
         return;
       }
 
-      const available = await biometricAvailable();
-
-      if (!available) {
-        showToast(
-          "A biometria não está disponível. Use o PIN."
-        );
+      /*
+       * Não aguardamos biometricAvailable() antes de credentials.get(),
+       * pois o await pode consumir a ativação do toque no mobile.
+       */
+      if (!window.isSecureContext || !window.PublicKeyCredential || !navigator.credentials) {
+        showToast("A biometria não está disponível. Use o PIN.");
         return;
       }
 
@@ -1130,27 +1137,45 @@
 
       const button = $("biometricBtn");
 
-      if (!button) return;
-
       /*
-       * O botão pode ser criado depois da execução inicial do módulo.
-       * Por isso o listener é instalado aqui, após a sessão e o DOM
-       * estarem prontos, em vez de depender de um if executado cedo.
+       * O botão pode existir somente depois da renderização da tela.
+       * Mantemos a configuração visual quando ele já existe, mas o
+       * acionamento também é delegado no document para funcionar
+       * mesmo se a tela for reconstruída dinamicamente.
        */
-      button.onclick = async () => {
+      if (button) {
+        updateBiometricButton();
+      }
 
-        if (!isMobileLayout()) {
+      if (setupBiometricButton.bound) {
+        return;
+      }
+
+      setupBiometricButton.bound = true;
+
+      document.addEventListener("click", async event => {
+        const target = event.target?.closest?.("#biometricBtn");
+
+        if (!target || !isMobileLayout()) {
           return;
         }
 
-        if (localStorage.getItem("ep_biometric_cred")) {
-          await unlockWithBiometric();
-        } else {
-          await registerBiometric();
-        }
-      };
+        event.preventDefault();
+        event.stopPropagation();
 
-      updateBiometricButton();
+        target.disabled = true;
+
+        try {
+          if (localStorage.getItem("ep_biometric_cred")) {
+            await unlockWithBiometric();
+          } else {
+            await registerBiometric();
+          }
+        } finally {
+          target.disabled = false;
+          updateBiometricButton();
+        }
+      }, true);
     }
 
 
@@ -1362,9 +1387,7 @@
 
       if (biometricId) {
 
-        const available = await biometricAvailable();
-
-        if (available) {
+        if (window.isSecureContext && window.PublicKeyCredential && navigator.credentials) {
 
           try {
 
@@ -5546,6 +5569,93 @@
 
 
     /* =========================================================
+       NOTIFICAÇÕES MOBILE
+    ========================================================= */
+
+    function notificationsEnabled() {
+      return localStorage.getItem("ep_safe_notifications") !== "0";
+    }
+
+    async function requestMobileNotifications() {
+      if (!isMobileLayout() || !notificationsEnabled()) {
+        return "denied";
+      }
+
+      if (!("Notification" in window)) {
+        showToast("Este navegador não oferece notificações.");
+        return "unsupported";
+      }
+
+      try {
+        if (Notification.permission === "default") {
+          const permission = await Notification.requestPermission();
+          if (permission !== "granted") {
+            showToast("Notificações não autorizadas.");
+          }
+          return permission;
+        }
+
+        return Notification.permission;
+      } catch (e) {
+        console.warn("Permissão de notificações:", e);
+        showToast("Não foi possível ativar as notificações.");
+        return "denied";
+      }
+    }
+
+    async function showMobileNotification(message) {
+      if (!isMobileLayout() || !notificationsEnabled()) return;
+      if (!("Notification" in window) || Notification.permission !== "granted") return;
+      if (!message || !message.text) return;
+      if (message.senderUid === auth.currentUser?.uid) return;
+
+      const id = String(message.id || "");
+      if (id && lastNotifiedMessageIds.has(id)) return;
+      if (id) {
+        lastNotifiedMessageIds.add(id);
+        if (lastNotifiedMessageIds.size > 100) {
+          lastNotifiedMessageIds = new Set([...lastNotifiedMessageIds].slice(-60));
+        }
+      }
+
+      const title = message.senderName || message.sender || "Nova mensagem";
+      const body = String(message.text).slice(0, 140);
+
+      try {
+        const registration = await navigator.serviceWorker?.ready;
+
+        if (registration?.showNotification) {
+          await registration.showNotification("CrIArt", {
+            body: `${title}: ${body}`,
+            tag: id ? `criart-${id}` : "criart-message",
+            renotify: true,
+            icon: "./icon-criart-192.png",
+            badge: "./icon-criart-192.png",
+            data: { url: "./" }
+          });
+          return;
+        }
+
+        new Notification("CrIArt", { body: `${title}: ${body}` });
+      } catch (e) {
+        console.warn("Notificação mobile:", e);
+      }
+    }
+
+    function initMobileNotifications() {
+      if (notificationInitialized) return;
+      notificationInitialized = true;
+
+      if (!isMobileLayout() || !("Notification" in window)) return;
+
+      const safe = $("safeNotifications");
+      if (safe) {
+        safe.checked = notificationsEnabled();
+      }
+    }
+
+
+    /* =========================================================
        LISTENER DAS MENSAGENS
     ========================================================= */
 
@@ -5624,6 +5734,26 @@
               await decryptMessages(
                 raw
               );
+
+            /*
+             * Notifica somente mensagens novas recebidas de outra pessoa.
+             * No primeiro carregamento apenas registramos os IDs para não
+             * disparar dezenas de notificações antigas.
+             */
+            if (!notificationInitialized) {
+              raw.forEach(item => {
+                if (item.id) lastNotifiedMessageIds.add(item.id);
+              });
+              initMobileNotifications();
+            } else if (raw.length) {
+              const newestRaw = raw[raw.length - 1];
+              if (newestRaw?.id && !lastNotifiedMessageIds.has(newestRaw.id)) {
+                const newest = messages.find(m => m.id === newestRaw.id);
+                if (newest) {
+                  showMobileNotification(newest);
+                }
+              }
+            }
 
 
             await renderMessages();
@@ -6260,6 +6390,7 @@
 
       setupPinpad();
       setupBiometricButton();
+      initMobileNotifications();
 
 
       /*
@@ -6872,6 +7003,21 @@
               localStorage.getItem(
                 "ep_safe_notifications"
               ) !== "0";
+
+            /*
+             * O clique em Configurações é uma ativação do usuário.
+             * Quando a permissão ainda estiver como "default", podemos
+             * solicitar a autorização do sistema aqui sem depender de
+             * uma chamada automática bloqueada pelo navegador mobile.
+             */
+            if (
+              isMobileLayout() &&
+              $("safeNotifications").checked &&
+              "Notification" in window &&
+              Notification.permission === "default"
+            ) {
+              requestMobileNotifications();
+            }
           }
 
 
@@ -6934,13 +7080,22 @@
     if ($("safeNotifications")) {
 
       $("safeNotifications").onchange =
-        e =>
+        async e => {
+          const enabled = e.target.checked;
+
           localStorage.setItem(
             "ep_safe_notifications",
-            e.target.checked
-              ? "1"
-              : "0"
+            enabled ? "1" : "0"
           );
+
+          if (enabled && isMobileLayout()) {
+            const permission = await requestMobileNotifications();
+            if (permission !== "granted") {
+              e.target.checked = false;
+              localStorage.setItem("ep_safe_notifications", "0");
+            }
+          }
+        };
     }
 
 
