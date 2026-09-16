@@ -3,9 +3,9 @@
   --panel:#f7f7f5;
   --ink:#18201d;
   --muted:#6e7773;
-  --green:#0b3d35;
-  --green2:#0e6a5b;
-  --mine:#d8f4e5;
+  --green:#3f4442;
+  --green2:#626866;
+  --mine:#e5e7e6;
   --other:#fff;
   --danger:#b42318;
   --line:#d8d9d6;
@@ -112,8 +112,8 @@ button,
   background:
     linear-gradient(
       145deg,
-      #0b3d35,
-      #126b5c
+      #4a4f4d,
+      #686d6a
     );
 
   color:white;
@@ -166,10 +166,10 @@ button,
 }
 
 .field:focus{
-  border-color:#2b8978;
+  border-color:#737a77;
 
   box-shadow:
-    0 0 0 3px #2b897822;
+    0 0 0 3px #737a7722;
 }
 
 .primary{
@@ -299,7 +299,7 @@ header{
 .head-status{
   font-size:11px;
 
-  color:#b9d8d1;
+  color:#c8ccca;
 
   white-space:nowrap;
   overflow:hidden;
@@ -376,7 +376,7 @@ header{
 }
 
 .search input::placeholder{
-  color:#c6ddd8;
+  color:#d0d3d1;
 }
 
 
@@ -789,7 +789,7 @@ footer{
 }
 
 .send{
-  background:#0b9b7e;
+  background:#666c69;
   color:white;
 }
 
@@ -823,10 +823,10 @@ footer{
 }
 
 .input-wrap:focus-within{
-  border-color:#2b8978;
+  border-color:#737a77;
 
   box-shadow:
-    0 0 0 2px #2b897822;
+    0 0 0 2px #737a7722;
 }
 
 textarea{
@@ -985,7 +985,7 @@ textarea{
 }
 
 .switch:checked{
-  background:#0b9b7e;
+  background:#666c69;
 }
 
 .switch:after{
@@ -1223,7 +1223,7 @@ textarea{
 }
 
 .lock-help{
-  color:#cce3de;
+  color:#d2d5d3;
 }
 
 .biometric-btn{
@@ -1546,13 +1546,13 @@ header .actions{
 #panicScreen .ai-disguise-app{
   --ai-bg:#f6f7f8;
   --ai-panel:#ffffff;
-  --ai-soft:#eef3f1;
+  --ai-soft:#eef0ef;
   --ai-border:#e2e6e8;
   --ai-text:#17211f;
   --ai-muted:#6d7774;
-  --ai-accent:#17463b;
-  --ai-accent-2:#216b59;
-  --ai-user:#e1f2eb;
+  --ai-accent:#4b504e;
+  --ai-accent-2:#666c69;
+  --ai-user:#e7e8e8;
   --ai-shadow:0 14px 40px rgba(17,35,31,.10);
 
   position:absolute;
@@ -1671,7 +1671,7 @@ header .actions{
   display:flex;
   flex-direction:column;
   padding:14px 10px;
-  background:#eef1f0;
+  background:#eceeed;
   border-right:1px solid var(--ai-border);
 }
 
@@ -1727,8 +1727,8 @@ header .actions{
 
 #panicScreen .ai-history-item:hover,
 #panicScreen .ai-history-item.active{
-  background:#dfe6e3;
-  color:#173e35;
+  background:#e2e4e3;
+  color:#414644;
 }
 
 #panicScreen .ai-main{
@@ -1841,7 +1841,7 @@ header .actions{
 
 #panicScreen .ai-message.user .ai-message-bubble{
   background:var(--ai-user);
-  border-color:#d3e9e1;
+  border-color:#d9dcdb;
   border-bottom-right-radius:5px;
 }
 
@@ -2171,7 +2171,7 @@ header .actions{
   color:#fff;
   font-size:23px;
   font-weight:800;
-  box-shadow:0 8px 20px #0b3d3533;
+  box-shadow:0 8px 20px #3f444233;
 }
 
 .criart-gate-copy{
@@ -2212,7 +2212,7 @@ header .actions{
   margin-top:12px;
   padding:11px 12px;
   border-radius:12px;
-  background:#eef3f1;
+  background:#eef0ef;
   color:#66706c;
   font-size:10px;
   line-height:1.5;
@@ -2235,7 +2235,7 @@ header .actions{
 
 #panicScreen .ai-history-row.active,
 #panicScreen .ai-history-row:hover{
-  background:#dfe6e3;
+  background:#e2e4e3;
 }
 
 #panicScreen .ai-history-row .ai-history-item{
