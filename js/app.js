@@ -1393,13 +1393,6 @@
                   aria-label="Abrir chat privado"
                 >⚙️</button>
 
-                <button
-                  id="panicMenuButton"
-                  class="ai-icon-button menu"
-                  type="button"
-                  title="Menu"
-                  aria-label="Abrir menu"
-                >☰</button>
               </div>
             </header>
 
@@ -2321,10 +2314,6 @@
          * o chat privado. A exclusão continua disponível
          * individualmente no histórico das conversas.
          */
-        $("panicMenuButton").onclick =
-          authenticatePanicExit;
-
-
         /*
          * Recupera a conversa anterior ou cria uma nova.
          */
@@ -2361,17 +2350,9 @@
 
 
       /*
-       * Os controles superiores precisam continuar funcionando
-       * também quando o modo já tiver sido construído anteriormente.
+       * O botão de configuração continua sendo a porta discreta
+       * para o chat privado, inclusive ao reconstruir a tela.
        */
-      const menu =
-        $("panicMenuButton");
-
-      if (menu) {
-        menu.onclick =
-          authenticatePanicExit;
-      }
-
       const chatMode =
         $("aiChatModeTop");
 
