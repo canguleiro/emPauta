@@ -1232,6 +1232,13 @@ textarea{
   width:100%;
 }
 
+/* A biometria é uma porta de desbloqueio exclusiva do mobile.
+   No desktop, o acesso permanece protegido pelo PIN quando
+   o bloqueio local estiver habilitado. */
+.desktop-only-hidden{
+  display:none!important;
+}
+
 .panic-unlock{
   margin-left:auto;
 
