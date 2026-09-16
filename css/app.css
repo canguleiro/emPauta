@@ -2447,3 +2447,104 @@ header .actions{
   }
 
 }
+
+
+/* =========================================================
+   CrIArt — CONFIGURAÇÕES DE NOTIFICAÇÕES E SONS
+========================================================= */
+
+.notification-settings-panel{
+  margin-top:4px;
+  padding:14px 0 2px;
+  border-top:1px solid #eee;
+}
+
+.notification-settings-title{
+  font-size:14px;
+  font-weight:800;
+  color:var(--ink);
+}
+
+.notification-settings-help{
+  margin-top:4px;
+  margin-bottom:6px;
+  color:#7a827e;
+  font-size:11px;
+  line-height:1.45;
+}
+
+.notification-setting-row,
+.notification-setting-select{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  padding:11px 0;
+  border-bottom:1px solid #eee;
+  font-size:12px;
+}
+
+.notification-setting-row > div,
+.notification-setting-select > span{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+
+.notification-setting-row strong,
+.notification-setting-select strong{
+  font-size:12px;
+  font-weight:750;
+}
+
+.notification-setting-row small,
+.notification-setting-select small{
+  color:#7b8380;
+  font-size:10px;
+  line-height:1.35;
+}
+
+.notification-setting-row .switch:disabled{
+  opacity:.4;
+  cursor:not-allowed;
+}
+
+.notification-select{
+  min-height:36px;
+  padding:7px 10px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:#fafafa;
+  color:var(--ink);
+  outline:none;
+}
+
+.notification-select:disabled{
+  opacity:.45;
+  cursor:not-allowed;
+}
+
+.notification-test-button{
+  width:100%;
+  margin-top:12px;
+  min-height:40px;
+}
+
+.notification-system-note{
+  margin-top:8px;
+  color:#858c89;
+  font-size:9px;
+  line-height:1.45;
+}
+
+@media(max-width:650px){
+  .notification-setting-row,
+  .notification-setting-select{
+    gap:10px;
+  }
+
+  .notification-settings-panel{
+    padding-top:12px;
+  }
+}
