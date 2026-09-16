@@ -1659,6 +1659,9 @@ header .actions{
 
 #panicScreen .ai-history-toggle{
   display:none;
+  flex:0 0 auto;
+  margin:0;
+  font-size:20px;
 }
 
 #panicScreen .ai-layout{
@@ -2001,7 +2004,17 @@ header .actions{
   }
 
   #panicScreen .ai-brand{
-    gap:8px;
+    gap:6px;
+    min-width:0;
+  }
+
+  #panicScreen .ai-brand > .ai-history-toggle{
+    display:grid;
+    place-items:center;
+    width:34px;
+    height:34px;
+    margin-right:1px;
+    flex:0 0 34px;
   }
 
   #panicScreen .ai-brand-mark{
