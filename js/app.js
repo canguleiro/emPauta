@@ -2,7 +2,7 @@
       initializeApp
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 
-    /* V19 — CrIArt como modo disfarce automático somente no mobile; desktop abre direto no chat. */
+    /* V20 — CrIArt como modo disfarce automático somente no mobile; desktop abre direto no chat. */
 
     import {
       getAuth,
@@ -1377,14 +1377,6 @@
 
             <header class="ai-topbar">
               <div class="ai-brand">
-                <span class="ai-brand-mark">✦</span>
-                <div class="ai-brand-copy">
-                  <strong>CrIArt</strong>
-                  <small>Assistente de ideias</small>
-                </div>
-              </div>
-
-              <div class="ai-top-actions">
 
                 <button
                   id="aiHistoryToggle"
@@ -1392,7 +1384,18 @@
                   type="button"
                   title="Abrir conversas"
                   aria-label="Abrir conversas"
-                >▤</button>
+                >☰</button>
+
+                <span class="ai-brand-mark">✦</span>
+
+                <div class="ai-brand-copy">
+                  <strong>CrIArt</strong>
+                  <small>Assistente de ideias</small>
+                </div>
+
+              </div>
+
+              <div class="ai-top-actions">
 
                 <button
                   id="aiChatModeTop"
