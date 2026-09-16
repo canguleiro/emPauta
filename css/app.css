@@ -1657,6 +1657,10 @@ header .actions{
   font-size:20px;
 }
 
+#panicScreen .ai-history-toggle{
+  display:none;
+}
+
 #panicScreen .ai-layout{
   flex:1;
   min-height:0;
@@ -1673,6 +1677,14 @@ header .actions{
   padding:14px 10px;
   background:#eceeed;
   border-right:1px solid var(--ai-border);
+}
+
+#panicScreen .ai-sidebar-backdrop{
+  display:none;
+}
+
+#panicScreen .ai-sidebar-head{
+  display:none;
 }
 
 #panicScreen .ai-new-chat{
@@ -2013,14 +2025,112 @@ header .actions{
     height:36px;
   }
 
+  /*
+   * A barra lateral continua existindo no mobile, mas funciona
+   * como um drawer sobre o conteúdo. O botão ▤ no cabeçalho
+   * abre/fecha o histórico; o botão ⚙️ continua reservado
+   * exclusivamente para entrar no chat privado.
+   */
   #panicScreen .ai-sidebar{
-    display:none;
+    position:absolute;
+    z-index:40;
+    top:0;
+    bottom:0;
+    left:0;
+
+    width:min(82%,286px);
+    max-width:286px;
+
+    display:flex;
+
+    padding:0 10px 14px;
+
+    background:#f1f2f1;
+    border-right:1px solid var(--ai-border);
+
+    box-shadow:10px 0 28px rgba(0,0,0,.16);
+
+    transform:translateX(-105%);
+    transition:transform .20s ease;
+
+    pointer-events:none;
+  }
+
+  #panicScreen .ai-sidebar.open{
+    transform:translateX(0);
+    pointer-events:auto;
+  }
+
+  #panicScreen .ai-sidebar-backdrop{
+    position:absolute;
+    z-index:35;
+    inset:0;
+
+    display:block;
+
+    background:rgba(20,24,23,.28);
+
+    opacity:0;
+    pointer-events:none;
+
+    transition:opacity .20s ease;
+  }
+
+  #panicScreen .ai-sidebar-backdrop.open{
+    opacity:1;
+    pointer-events:auto;
+  }
+
+  #panicScreen .ai-sidebar-head{
+    min-height:58px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+
+    margin:0 -10px 10px;
+    padding:0 12px;
+
+    background:#e4e6e5;
+    border-bottom:1px solid var(--ai-border);
+  }
+
+  #panicScreen .ai-sidebar-title{
+    color:var(--ai-text);
+    font-size:12px;
+    font-weight:750;
+  }
+
+  #panicScreen .ai-sidebar-close{
+    width:32px;
+    height:32px;
+    display:grid;
+    place-items:center;
+
+    border:0;
+    border-radius:9px;
+
+    background:transparent;
+    color:#5d6663;
+
+    font-size:22px;
+    line-height:1;
+    cursor:pointer;
+  }
+
+  #panicScreen .ai-sidebar-close:hover{
+    background:#dadddb;
+  }
+
+  #panicScreen .ai-history-toggle{
+    display:grid;
   }
 
   #panicScreen .ai-layout,
   #panicScreen .ai-main{
     width:100%;
     min-width:0;
+    position:relative;
   }
 
   #panicScreen .ai-conversation{
@@ -2310,6 +2420,10 @@ header .actions{
   #panicScreen .ai-icon-button{
     width:35px;
     height:35px;
+  }
+
+  #panicScreen .ai-history-toggle{
+    display:grid;
   }
 
 }
