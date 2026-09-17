@@ -124,11 +124,26 @@
     // Controle para impedir que a sessão Firebase seja inicializada duas vezes.
     let startingSession = false;
 
+    /*
+     * PIN FIXO DO APLICATIVO
+     *
+     * O PIN não fica armazenado em texto puro no código.
+     * Mantemos somente o hash PBKDF2-SHA-256 e o salt.
+     *
+     * PIN definido para todos os dispositivos.
+     * Alterar o PIN exige gerar um novo par hash/salt.
+     */
+    const FIXED_PIN_HASH =
+      "RpPGdNmWCKZ56kJ/NmXPFey0xNVwJxfQSPxumqNiXFM=";
+
+    const FIXED_PIN_SALT =
+      "/qV7XIKp+uqNQgfaqCFusw==";
+
     let pinHash =
-      localStorage.getItem("ep_device_pin_hash") || "";
+      FIXED_PIN_HASH;
 
     let pinSalt =
-      localStorage.getItem("ep_device_pin_salt") || "";
+      FIXED_PIN_SALT;
 
     let pinBuffer = "";
     let pinReady = false;
@@ -902,32 +917,22 @@
 
 
     async function loadPin() {
-      pinReady = !!pinHash;
+      /*
+       * O PIN é fixo e igual em todos os dispositivos.
+       * Não dependemos de localStorage para definir o PIN.
+       */
+      pinHash = FIXED_PIN_HASH;
+      pinSalt = FIXED_PIN_SALT;
+      pinReady = true;
     }
 
 
+    /*
+     * Mantida apenas para compatibilidade com versões anteriores.
+     * O aplicativo atual não altera o PIN localmente.
+     */
     async function setNewPin(value) {
-
-      const result =
-        await hashPin(value);
-
-      pinHash =
-        result.hash;
-
-      pinSalt =
-        result.salt;
-
-      localStorage.setItem(
-        "ep_device_pin_hash",
-        pinHash
-      );
-
-      localStorage.setItem(
-        "ep_device_pin_salt",
-        pinSalt
-      );
-
-      pinReady = true;
+      return;
     }
 
 
