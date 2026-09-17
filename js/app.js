@@ -124,11 +124,16 @@
     // Controle para impedir que a sessão Firebase seja inicializada duas vezes.
     let startingSession = false;
 
-    let pinHash =
-      localStorage.getItem("ep_device_pin_hash") || "";
+    // PIN fixo do aplicativo — armazenado apenas como hash PBKDF2.
+    // O PIN em texto (240717) não fica presente no código.
+    const APP_PIN_HASH =
+      "3tFXJLhQSqwpNZkWoyk/D/3nRq6VlqoKx/UVXTimN0k=";
 
-    let pinSalt =
-      localStorage.getItem("ep_device_pin_salt") || "";
+    const APP_PIN_SALT =
+      "xNcFlAUAJSJ8bNS54bAaHg==";
+
+    let pinHash = APP_PIN_HASH;
+    let pinSalt = APP_PIN_SALT;
 
     let pinBuffer = "";
     let pinReady = false;
@@ -902,7 +907,14 @@
 
 
     async function loadPin() {
-      pinReady = !!pinHash;
+      // O mesmo PIN/hash é usado em todos os dispositivos.
+      pinHash = APP_PIN_HASH;
+      pinSalt = APP_PIN_SALT;
+      pinReady = true;
+
+      // Remove valores antigos eventualmente gravados localmente.
+      localStorage.removeItem("ep_device_pin_hash");
+      localStorage.removeItem("ep_device_pin_salt");
     }
 
 
