@@ -160,10 +160,6 @@
     let notificationInitialized = false;
     let lastNotifiedMessageIds = new Set();
 
-    // Último snapshot bruto das mensagens. Mantido para que uma
-    // atualização das chaves públicas possa reprocessar a descriptografia.
-    let lastRawMessages = [];
-
     /* =========================================================
        PREFERÊNCIAS DE NOTIFICAÇÕES / SONS
        Padrões inspirados em aplicativos de mensagens:
@@ -5381,31 +5377,7 @@
        DESCRIPTOGRAFAR MENSAGENS
     ========================================================= */
 
-    async function waitForKeysReady(timeoutMs = 10000) {
-
-      if (keysReady) {
-        return true;
-      }
-
-      const started = Date.now();
-
-      while (!keysReady && Date.now() - started < timeoutMs) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-
-      return keysReady;
-    }
-
-
     async function decryptMessages(raw) {
-
-      /*
-       * O listener de mensagens pode responder antes do listener
-       * de chaves. Sem esta espera, a mensagem é marcada como
-       * indisponível e não é reprocessada quando a chave chega.
-       */
-      await waitForKeysReady();
-
 
       const other =
         await getOtherUid();
@@ -5626,27 +5598,6 @@
 
 
             checkSessionReady();
-
-            /*
-             * Se o snapshot das mensagens chegou antes das chaves,
-             * ele pode ter sido exibido como indisponível. Assim que
-             * a chave fica disponível, tentamos descriptografá-lo
-             * novamente sem exigir que uma nova mensagem seja enviada.
-             */
-            if (lastRawMessages.length) {
-              Promise.resolve()
-                .then(async () => {
-                  try {
-                    messages = await decryptMessages(lastRawMessages);
-                    await renderMessages();
-                  } catch (e) {
-                    console.warn(
-                      "Reprocessamento das mensagens após atualização das chaves:",
-                      e
-                    );
-                  }
-                });
-            }
           },
 
 
@@ -5784,10 +5735,6 @@
 
         playMessageSound.ctx =
           audioContext;
-
-        if (audioContext.state === "suspended") {
-          await audioContext.resume().catch(() => {});
-        }
 
         const now =
           audioContext.currentTime;
@@ -5937,10 +5884,6 @@
     async function showMobileNotification(
       message
     ) {
-
-      if (!isMobileLayout()) {
-        return;
-      }
 
       const settings =
         getNotificationSettings();
@@ -6465,6 +6408,15 @@
     function initMobileNotifications() {
 
       if (
+        notificationInitialized
+      ) {
+        return;
+      }
+
+      notificationInitialized =
+        true;
+
+      if (
         !("Notification" in window)
       ) {
         return;
@@ -6548,18 +6500,12 @@
                 })
             );
 
-            // Guarda o snapshot para eventual reprocessamento quando
-            // o listener das chaves públicas responder depois.
-            lastRawMessages = raw;
-
 
             /*
-             * Descriptografa as mensagens somente depois que a chave
-             * pública do outro lado estiver disponível.
+             * Descriptografa as mensagens
+             * antes de liberar completamente
+             * a interface.
              */
-
-            const hadNotificationBaseline =
-              notificationInitialized;
 
             messages =
               await decryptMessages(
@@ -6567,46 +6513,24 @@
               );
 
             /*
-             * No primeiro snapshot estabelecemos a linha de base.
-             * Mensagens antigas nunca geram notificações.
+             * Notifica somente mensagens novas recebidas de outra pessoa.
+             * No primeiro carregamento apenas registramos os IDs para não
+             * disparar dezenas de notificações antigas.
              */
-            if (!hadNotificationBaseline) {
-
+            if (!notificationInitialized) {
               raw.forEach(item => {
-                if (item.id) {
-                  lastNotifiedMessageIds.add(item.id);
-                }
+                if (item.id) lastNotifiedMessageIds.add(item.id);
               });
-
-              notificationInitialized = true;
-
-            } else {
-
-              /*
-               * Processa todas as mensagens novas recebidas do outro
-               * usuário, e não apenas a última. Isso evita perder
-               * notificações quando chegam várias de uma vez.
-               */
-              for (const item of raw) {
-
-                if (
-                  !item.id ||
-                  lastNotifiedMessageIds.has(item.id) ||
-                  item.senderUid === auth.currentUser?.uid
-                ) {
-                  continue;
-                }
-
-                const received =
-                  messages.find(m => m.id === item.id);
-
-                if (received) {
-                  await showMobileNotification(received);
+              initMobileNotifications();
+            } else if (raw.length) {
+              const newestRaw = raw[raw.length - 1];
+              if (newestRaw?.id && !lastNotifiedMessageIds.has(newestRaw.id)) {
+                const newest = messages.find(m => m.id === newestRaw.id);
+                if (newest) {
+                  showMobileNotification(newest);
                 }
               }
             }
-
-            initMobileNotifications();
 
 
             await renderMessages();
