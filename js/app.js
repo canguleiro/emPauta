@@ -155,6 +155,73 @@
     let notificationInitialized = false;
     let lastNotifiedMessageIds = new Set();
 
+    /* =========================================================
+       PREFERÊNCIAS DE NOTIFICAÇÕES / SONS
+       Padrões inspirados em aplicativos de mensagens:
+       notificações, som, vibração e prévia ativados.
+    ========================================================= */
+    const NOTIFICATION_DEFAULTS = {
+      enabled: true,
+      sound: true,
+      vibration: true,
+      preview: true,
+      soundStyle: "default"
+    };
+
+    function getNotificationSettings() {
+      const raw = localStorage.getItem(
+        "criart_notification_settings"
+      );
+
+      try {
+        const parsed =
+          raw ? JSON.parse(raw) : {};
+
+        const settings = {
+          ...NOTIFICATION_DEFAULTS,
+          ...(parsed && typeof parsed === "object"
+            ? parsed
+            : {})
+        };
+
+        /*
+         * Compatibilidade com a preferência usada
+         * nas versões anteriores do CrIArt.
+         */
+        if (
+          !raw &&
+          localStorage.getItem(
+            "ep_safe_notifications"
+          ) === "0"
+        ) {
+          settings.enabled = false;
+        }
+
+        return settings;
+
+      } catch {
+        return {
+          ...NOTIFICATION_DEFAULTS
+        };
+      }
+    }
+
+    function saveNotificationSettings(
+      patch
+    ) {
+      const next = {
+        ...getNotificationSettings(),
+        ...patch
+      };
+
+      localStorage.setItem(
+        "criart_notification_settings",
+        JSON.stringify(next)
+      );
+
+      return next;
+    }
+
     let sessionInitPromise = null;
     let sessionInitResolve = null;
 
@@ -5569,92 +5636,791 @@
 
 
     /* =========================================================
-       NOTIFICAÇÕES MOBILE
+       NOTIFICAÇÕES / SONS
     ========================================================= */
 
     function notificationsEnabled() {
-      return localStorage.getItem("ep_safe_notifications") !== "0";
+      return getNotificationSettings().enabled;
     }
 
+
     async function requestMobileNotifications() {
-      if (!isMobileLayout() || !notificationsEnabled()) {
+      if (!notificationsEnabled()) {
         return "denied";
       }
 
       if (!("Notification" in window)) {
-        showToast("Este navegador não oferece notificações.");
+        showToast(
+          "Este navegador não oferece notificações."
+        );
+
         return "unsupported";
       }
 
       try {
-        if (Notification.permission === "default") {
-          const permission = await Notification.requestPermission();
-          if (permission !== "granted") {
-            showToast("Notificações não autorizadas.");
+
+        if (
+          Notification.permission ===
+          "default"
+        ) {
+          const permission =
+            await Notification.requestPermission();
+
+          if (
+            permission !==
+            "granted"
+          ) {
+            showToast(
+              "Notificações não autorizadas."
+            );
           }
+
           return permission;
         }
 
         return Notification.permission;
+
       } catch (e) {
-        console.warn("Permissão de notificações:", e);
-        showToast("Não foi possível ativar as notificações.");
+
+        console.warn(
+          "Permissão de notificações:",
+          e
+        );
+
+        showToast(
+          "Não foi possível ativar as notificações."
+        );
+
         return "denied";
       }
     }
 
-    async function showMobileNotification(message) {
-      if (!isMobileLayout() || !notificationsEnabled()) return;
-      if (!("Notification" in window) || Notification.permission !== "granted") return;
-      if (!message || !message.text) return;
-      if (message.senderUid === auth.currentUser?.uid) return;
 
-      const id = String(message.id || "");
-      if (id && lastNotifiedMessageIds.has(id)) return;
-      if (id) {
-        lastNotifiedMessageIds.add(id);
-        if (lastNotifiedMessageIds.size > 100) {
-          lastNotifiedMessageIds = new Set([...lastNotifiedMessageIds].slice(-60));
-        }
+    function playMessageSound() {
+
+      const settings =
+        getNotificationSettings();
+
+      if (!settings.sound) {
+        return;
       }
 
-      const title = message.senderName || message.sender || "Nova mensagem";
-      const body = String(message.text).slice(0, 140);
+      /*
+       * O som local é reproduzido quando a página
+       * está visível e o navegador permite áudio.
+       *
+       * Em segundo plano, o som da notificação do
+       * sistema continua sendo controlado pelo SO.
+       */
+      if (
+        document.visibilityState !==
+          "visible" ||
+        !window.AudioContext
+      ) {
+        return;
+      }
 
       try {
-        const registration = await navigator.serviceWorker?.ready;
 
-        if (registration?.showNotification) {
-          await registration.showNotification("CrIArt", {
-            body: `${title}: ${body}`,
-            tag: id ? `criart-${id}` : "criart-message",
-            renotify: true,
-            icon: "./icon-criart-192.png",
-            badge: "./icon-criart-192.png",
-            data: { url: "./" }
-          });
-          return;
-        }
+        const audioContext =
+          playMessageSound.ctx ||
+          new AudioContext();
 
-        new Notification("CrIArt", {
-          body: `${title}: ${body}`,
-          icon: "./icon-criart-192.png",
-          badge: "./icon-criart-badge.png"
-        });
+        playMessageSound.ctx =
+          audioContext;
+
+        const now =
+          audioContext.currentTime;
+
+        const gain =
+          audioContext.createGain();
+
+        const oscillator =
+          audioContext.createOscillator();
+
+        const style =
+          settings.soundStyle ||
+          "default";
+
+        const profiles = {
+
+          default: {
+            type: "sine",
+            start: 880,
+            end: 660,
+            duration: 0.16
+          },
+
+          soft: {
+            type: "sine",
+            start: 720,
+            end: 560,
+            duration: 0.18
+          },
+
+          discreet: {
+            type: "triangle",
+            start: 520,
+            end: 520,
+            duration: 0.11
+          }
+        };
+
+        const profile =
+          profiles[style] ||
+          profiles.default;
+
+        oscillator.type =
+          profile.type;
+
+        oscillator.frequency.setValueAtTime(
+          profile.start,
+          now
+        );
+
+        oscillator.frequency.exponentialRampToValueAtTime(
+          Math.max(
+            80,
+            profile.end
+          ),
+          now +
+            profile.duration
+        );
+
+        gain.gain.setValueAtTime(
+          0.0001,
+          now
+        );
+
+        gain.gain.exponentialRampToValueAtTime(
+          0.045,
+          now + 0.015
+        );
+
+        gain.gain.exponentialRampToValueAtTime(
+          0.0001,
+          now +
+            profile.duration
+        );
+
+        oscillator.connect(gain);
+        gain.connect(
+          audioContext.destination
+        );
+
+        oscillator.start(now);
+
+        oscillator.stop(
+          now +
+            profile.duration +
+            0.02
+        );
+
       } catch (e) {
-        console.warn("Notificação mobile:", e);
+
+        console.warn(
+          "Som da mensagem:",
+          e
+        );
       }
     }
 
+
+    function vibrateForMessage() {
+
+      const settings =
+        getNotificationSettings();
+
+      if (
+        !settings.vibration ||
+        typeof navigator.vibrate !==
+          "function"
+      ) {
+        return;
+      }
+
+      try {
+        navigator.vibrate(
+          [80, 45, 80]
+        );
+      } catch {}
+    }
+
+
+    function getNotificationBody(
+      message
+    ) {
+
+      const settings =
+        getNotificationSettings();
+
+      if (!settings.preview) {
+        return (
+          "Você recebeu uma nova mensagem."
+        );
+      }
+
+      const title =
+        message.senderName ||
+        message.sender ||
+        "Nova mensagem";
+
+      return (
+        `${title}: ` +
+        String(
+          message.text
+        ).slice(0, 140)
+      );
+    }
+
+
+    async function showMobileNotification(
+      message
+    ) {
+
+      const settings =
+        getNotificationSettings();
+
+      if (
+        !settings.enabled ||
+        !("Notification" in window) ||
+        Notification.permission !==
+          "granted"
+      ) {
+        return;
+      }
+
+      if (
+        !message ||
+        !message.text
+      ) {
+        return;
+      }
+
+      if (
+        message.senderUid ===
+        auth.currentUser?.uid
+      ) {
+        return;
+      }
+
+      const id =
+        String(
+          message.id || ""
+        );
+
+      if (
+        id &&
+        lastNotifiedMessageIds.has(id)
+      ) {
+        return;
+      }
+
+      if (id) {
+
+        lastNotifiedMessageIds.add(
+          id
+        );
+
+        if (
+          lastNotifiedMessageIds.size >
+          100
+        ) {
+          lastNotifiedMessageIds =
+            new Set(
+              [
+                ...lastNotifiedMessageIds
+              ].slice(-60)
+            );
+        }
+      }
+
+      const body =
+        getNotificationBody(
+          message
+        );
+
+      try {
+
+        const registration =
+          await navigator
+            .serviceWorker
+            ?.ready;
+
+        if (
+          registration?.showNotification
+        ) {
+
+          const options = {
+
+            body,
+
+            tag:
+              id
+                ? `criart-${id}`
+                : "criart-message",
+
+            renotify: true,
+
+            icon:
+              "./icon-criart-192.png",
+
+            badge:
+              "./icon-criart-192.png",
+
+            data: {
+              url: "./"
+            }
+          };
+
+          /*
+           * A API Web não permite escolher de forma
+           * confiável um arquivo de áudio personalizado
+           * para a notificação. O som do alerta do sistema
+           * continua sendo definido pelo Android/iOS/browser.
+           *
+           * As preferências de som/vibração controlam
+           * principalmente o alerta local e o comportamento
+           * quando a página está ativa.
+           */
+          if (
+            !settings.sound &&
+            !settings.vibration
+          ) {
+            options.silent =
+              true;
+          }
+
+          if (
+            settings.vibration
+          ) {
+            options.vibrate =
+              [80, 45, 80];
+          }
+
+          await registration
+            .showNotification(
+              "CrIArt",
+              options
+            );
+
+        } else {
+
+          new Notification(
+            "CrIArt",
+            { body }
+          );
+        }
+
+        playMessageSound();
+        vibrateForMessage();
+
+      } catch (e) {
+
+        console.warn(
+          "Notificação:",
+          e
+        );
+      }
+    }
+
+
+    async function sendTestNotification() {
+
+      const settings =
+        getNotificationSettings();
+
+      if (!settings.enabled) {
+        showToast(
+          "Ative as notificações primeiro."
+        );
+
+        return;
+      }
+
+      const permission =
+        await requestMobileNotifications();
+
+      if (
+        permission !==
+        "granted"
+      ) {
+        return;
+      }
+
+      const body =
+        settings.preview
+          ? "Esta é uma notificação de teste do CrIArt."
+          : "Você recebeu uma nova mensagem.";
+
+      try {
+
+        const registration =
+          await navigator
+            .serviceWorker
+            ?.ready;
+
+        if (
+          registration?.showNotification
+        ) {
+
+          const options = {
+
+            body,
+
+            tag:
+              "criart-test-notification",
+
+            renotify: true,
+
+            icon:
+              "./icon-criart-192.png",
+
+            badge:
+              "./icon-criart-192.png",
+
+            data: {
+              url: "./"
+            }
+          };
+
+          if (
+            !settings.sound &&
+            !settings.vibration
+          ) {
+            options.silent =
+              true;
+          }
+
+          if (
+            settings.vibration
+          ) {
+            options.vibrate =
+              [80, 45, 80];
+          }
+
+          await registration
+            .showNotification(
+              "CrIArt",
+              options
+            );
+
+        } else {
+
+          new Notification(
+            "CrIArt",
+            { body }
+          );
+        }
+
+        playMessageSound();
+        vibrateForMessage();
+
+        showToast(
+          "Notificação de teste enviada."
+        );
+
+      } catch (e) {
+
+        console.warn(
+          "Teste de notificação:",
+          e
+        );
+
+        showToast(
+          "Não foi possível enviar o teste."
+        );
+      }
+    }
+
+
+    function syncNotificationSettingsUI() {
+
+      const settings =
+        getNotificationSettings();
+
+      const enabled =
+        $("safeNotifications");
+
+      const sound =
+        $("criartNotificationSound");
+
+      const vibration =
+        $("criartNotificationVibration");
+
+      const preview =
+        $("criartNotificationPreview");
+
+      const soundStyle =
+        $("criartNotificationSoundStyle");
+
+      if (enabled) {
+        enabled.checked =
+          settings.enabled;
+      }
+
+      if (sound) {
+
+        sound.checked =
+          settings.sound;
+
+        sound.disabled =
+          !settings.enabled;
+      }
+
+      if (vibration) {
+
+        vibration.checked =
+          settings.vibration;
+
+        vibration.disabled =
+          !settings.enabled;
+      }
+
+      if (preview) {
+
+        preview.checked =
+          settings.preview;
+
+        preview.disabled =
+          !settings.enabled;
+      }
+
+      if (soundStyle) {
+
+        soundStyle.value =
+          settings.soundStyle;
+
+        soundStyle.disabled =
+          !settings.enabled ||
+          !settings.sound;
+      }
+    }
+
+
+    function ensureNotificationSettingsUI() {
+
+      const master =
+        $("safeNotifications");
+
+      if (!master) {
+        return;
+      }
+
+      const anchor =
+        master.closest(".setting") ||
+        master.parentElement;
+
+      if (!anchor) {
+        return;
+      }
+
+      if (
+        $("criartNotificationSettings")
+      ) {
+        syncNotificationSettingsUI();
+        return;
+      }
+
+      const panel =
+        document.createElement(
+          "div"
+        );
+
+      panel.id =
+        "criartNotificationSettings";
+
+      panel.className =
+        "notification-settings-panel";
+
+      panel.innerHTML = `
+        <div class="notification-settings-title">
+          Notificações e sons
+        </div>
+
+        <div class="notification-settings-help">
+          Ajuste alertas, prévia das mensagens e comportamento sonoro.
+        </div>
+
+        <div class="notification-setting-row">
+          <div>
+            <strong>Som das mensagens</strong>
+            <small>Alerta sonoro quando chegar uma mensagem.</small>
+          </div>
+
+          <input
+            id="criartNotificationSound"
+            class="switch"
+            type="checkbox"
+            aria-label="Som das mensagens"
+          >
+        </div>
+
+        <div class="notification-setting-row">
+          <div>
+            <strong>Vibração</strong>
+            <small>Vibração ao receber uma mensagem no celular.</small>
+          </div>
+
+          <input
+            id="criartNotificationVibration"
+            class="switch"
+            type="checkbox"
+            aria-label="Vibração"
+          >
+        </div>
+
+        <div class="notification-setting-row">
+          <div>
+            <strong>Mostrar prévia</strong>
+            <small>Exibe o conteúdo da mensagem na notificação.</small>
+          </div>
+
+          <input
+            id="criartNotificationPreview"
+            class="switch"
+            type="checkbox"
+            aria-label="Mostrar prévia"
+          >
+        </div>
+
+        <label class="notification-setting-select">
+          <span>
+            <strong>Som</strong>
+            <small>Estilo do alerta local do CrIArt.</small>
+          </span>
+
+          <select
+            id="criartNotificationSoundStyle"
+            class="field-auto notification-select"
+          >
+            <option value="default">Padrão</option>
+            <option value="soft">Suave</option>
+            <option value="discreet">Discreto</option>
+          </select>
+        </label>
+
+        <button
+          id="criartTestNotification"
+          class="secondary notification-test-button"
+          type="button"
+        >
+          Testar notificação
+        </button>
+
+        <div class="notification-system-note">
+          O som da notificação do sistema pode ser definido pelo próprio Android/iOS.
+        </div>
+      `;
+
+      anchor.insertAdjacentElement(
+        "afterend",
+        panel
+      );
+
+      const sound =
+        $("criartNotificationSound");
+
+      const vibration =
+        $("criartNotificationVibration");
+
+      const preview =
+        $("criartNotificationPreview");
+
+      const soundStyle =
+        $("criartNotificationSoundStyle");
+
+      if (sound) {
+
+        sound.onchange =
+          e => {
+
+            saveNotificationSettings({
+              sound:
+                e.target.checked
+            });
+
+            syncNotificationSettingsUI();
+          };
+      }
+
+      if (vibration) {
+
+        vibration.onchange =
+          e => {
+
+            saveNotificationSettings({
+              vibration:
+                e.target.checked
+            });
+
+            syncNotificationSettingsUI();
+          };
+      }
+
+      if (preview) {
+
+        preview.onchange =
+          e => {
+
+            saveNotificationSettings({
+              preview:
+                e.target.checked
+            });
+
+            syncNotificationSettingsUI();
+          };
+      }
+
+      if (soundStyle) {
+
+        soundStyle.onchange =
+          e => {
+
+            saveNotificationSettings({
+              soundStyle:
+                e.target.value
+            });
+          };
+      }
+
+      const testButton =
+        $("criartTestNotification");
+
+      if (testButton) {
+
+        testButton.onclick =
+          () =>
+            sendTestNotification();
+      }
+
+      syncNotificationSettingsUI();
+    }
+
+
     function initMobileNotifications() {
-      if (notificationInitialized) return;
-      notificationInitialized = true;
 
-      if (!isMobileLayout() || !("Notification" in window)) return;
+      if (
+        notificationInitialized
+      ) {
+        return;
+      }
 
-      const safe = $("safeNotifications");
+      notificationInitialized =
+        true;
+
+      if (
+        !("Notification" in window)
+      ) {
+        return;
+      }
+
+      const safe =
+        $("safeNotifications");
+
       if (safe) {
-        safe.checked = notificationsEnabled();
+        safe.checked =
+          notificationsEnabled();
       }
     }
 
@@ -7002,27 +7768,12 @@
 
 
           if ($("safeNotifications")) {
-
             $("safeNotifications").checked =
-              localStorage.getItem(
-                "ep_safe_notifications"
-              ) !== "0";
-
-            /*
-             * O clique em Configurações é uma ativação do usuário.
-             * Quando a permissão ainda estiver como "default", podemos
-             * solicitar a autorização do sistema aqui sem depender de
-             * uma chamada automática bloqueada pelo navegador mobile.
-             */
-            if (
-              isMobileLayout() &&
-              $("safeNotifications").checked &&
-              "Notification" in window &&
-              Notification.permission === "default"
-            ) {
-              requestMobileNotifications();
-            }
+              getNotificationSettings().enabled;
           }
+
+          ensureNotificationSettingsUI();
+          syncNotificationSettingsUI();
 
 
           if ($("ttl")) {
@@ -7085,20 +7836,34 @@
 
       $("safeNotifications").onchange =
         async e => {
-          const enabled = e.target.checked;
 
-          localStorage.setItem(
-            "ep_safe_notifications",
-            enabled ? "1" : "0"
-          );
+          const enabled =
+            e.target.checked;
 
-          if (enabled && isMobileLayout()) {
-            const permission = await requestMobileNotifications();
-            if (permission !== "granted") {
-              e.target.checked = false;
-              localStorage.setItem("ep_safe_notifications", "0");
+          saveNotificationSettings({
+            enabled
+          });
+
+          if (enabled) {
+
+            const permission =
+              await requestMobileNotifications();
+
+            if (
+              permission !==
+              "granted"
+            ) {
+
+              e.target.checked =
+                false;
+
+              saveNotificationSettings({
+                enabled: false
+              });
             }
           }
+
+          syncNotificationSettingsUI();
         };
     }
 
