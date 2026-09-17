@@ -7052,8 +7052,6 @@
 
     async function start() {
 
-      updateDeviceGate("Dispositivo autorizado. Abrindo…");
-
       /*
        * Começamos sempre como
        * "não pronto".
@@ -7194,76 +7192,89 @@
     }
 
     /* =========================================================
-       ACESSO DO DISPOSITIVO
+       LOGIN
     ========================================================= */
 
     /*
-     * Não exibimos mais uma tela pública de e-mail/senha.
-     * O Firebase Auth continua responsável pela sessão, mas,
-     * quando ela já estiver persistida no navegador, a aplicação
-     * entra diretamente no modo protegido por PIN/biometria.
+     * Em um novo navegador/dispositivo, o acesso começa
+     * normalmente pelo Firebase Authentication.
      *
-     * Se o navegador não tiver uma sessão Firebase válida, esta
-     * tela apenas informa que o dispositivo ainda precisa ser
-     * autorizado. Isso evita criar um falso mecanismo de login
-     * local que não teria como autenticar no Firebase.
+     * Não existe mais uma etapa local de "autorização do dispositivo".
+     * Depois do login, a identidade criptográfica e o PIN/biometria
+     * continuam sendo configurados localmente neste dispositivo.
      */
 
-    /* =========================================================
-       TELA INICIAL — CrIArt
-       Mantém a tela de autorização existente, mas substitui
-       a identidade visual antiga pela marca do aplicativo de IA.
-    ========================================================= */
+    if ($("authForm")) {
 
-    function prepareCrIArtGate() {
+      $("authForm").onsubmit =
+        async e => {
 
-      const screen = $("authScreen");
-      const card = screen?.querySelector(".device-gate-card");
+          e.preventDefault();
 
-      if (!card) return;
+          $("authError").textContent = "";
 
-      const oldBrand =
-        card.querySelector(".news-mini-logo");
+          const email =
+            $("email").value.trim();
 
-      if (oldBrand) {
-        oldBrand.remove();
-      }
+          const password =
+            $("password").value;
 
-      if (!card.querySelector(".criart-gate-brand")) {
+          let nickname =
+            $("nickname").value.trim();
 
-        const brand = document.createElement("div");
+          /*
+           * O apelido pode ser deixado vazio.
+           * Nesse caso usamos uma identificação simples baseada no e-mail.
+           */
 
-        brand.className = "criart-gate-brand";
+          if (!nickname) {
+            nickname =
+              email.split("@")[0].trim() ||
+              "Dispositivo";
+          }
 
-        brand.innerHTML = `
-          <div class="criart-gate-mark" aria-hidden="true">✦</div>
-          <div class="criart-gate-copy">
-            <strong>CrIArt</strong>
-            <span>Assistente de ideias</span>
-          </div>
-        `;
+          sessionStorage.setItem(
+            "ep_pending_nick",
+            nickname
+          );
 
-        card.prepend(brand);
-      }
+          try {
+
+            await signInWithEmailAndPassword(
+              auth,
+              email,
+              password
+            );
+
+          } catch (err) {
+
+            sessionStorage.removeItem(
+              "ep_pending_nick"
+            );
+
+            console.error(
+              "Falha no login:",
+              err
+            );
+
+            if (
+              err.code ===
+              "auth/invalid-credential"
+            ) {
+
+              $("authError").textContent =
+                "E-mail ou senha inválidos.";
+
+            } else {
+
+              $("authError").textContent =
+                err.message ||
+                "Não foi possível entrar.";
+            }
+          }
+        };
     }
 
-
-    prepareCrIArtGate();
-
-
-    function updateDeviceGate(message) {
-
-      if ($("authStatus")) {
-        $("authStatus").textContent =
-          message ||
-          "Aguardando autorização deste dispositivo…";
-      }
-    }
-
-
-    updateDeviceGate(
-      "Verificando autorização do dispositivo…"
-    );
 
     /* =========================================================
        ESTADO DE AUTENTICAÇÃO
@@ -7295,13 +7306,13 @@
 
           updateSendState();
 
-          updateDeviceGate(
-            "Este dispositivo ainda não está autorizado."
-          );
-
           $("authScreen")
             ?.classList
             .remove("hidden");
+
+          if ($("authError")) {
+            $("authError").textContent = "";
+          }
 
           return;
         }
