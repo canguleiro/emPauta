@@ -26,27 +26,55 @@
   <!-- =========================
        AUTENTICAÇÃO
        ========================= -->
-  <section class="screen device-gate" id="authScreen">
+  <section class="screen" id="authScreen">
+    <div class="card">
 
-    <div class="device-gate-card">
+      <div class="brand">CrIArt</div>
+      <div class="sub">Assistente de ideias</div>
 
+      <form id="authForm">
 
-      <div class="device-gate-status" id="authStatus">
-        Preparando este dispositivo…
-      </div>
+        <input
+          class="field"
+          id="email"
+          type="email"
+          autocomplete="username"
+          placeholder="E-mail"
+          required
+        >
 
-      <p class="device-gate-text">
-        Este dispositivo precisa estar previamente autorizado para acessar o conteúdo privado.
+        <input
+          class="field"
+          id="password"
+          type="password"
+          autocomplete="current-password"
+          placeholder="Senha"
+          required
+        >
+
+        <input
+          class="field"
+          id="nickname"
+          type="text"
+          maxlength="40"
+          autocomplete="nickname"
+          placeholder="Nome/apelido deste dispositivo"
+        >
+
+        <button class="primary" type="submit">
+          Entrar
+        </button>
+
+        <div class="error" id="authError"></div>
+
+      </form>
+
+      <p class="tiny">
+        O acesso usa sua conta Firebase.
+        O conteúdo da conversa é cifrado no navegador antes de ser enviado ao Firebase.
       </p>
 
-      <div class="device-gate-hint">
-        Depois da ativação, o acesso será protegido por biometria ou senha deste dispositivo.
-      </div>
-
-      <div class="error" id="authError"></div>
-
     </div>
-
   </section>
 
   <!-- =========================
