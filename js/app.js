@@ -39,6 +39,11 @@
       deleteObject
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
+    import {
+      ensureDeviceIdentity,
+      registerDeviceIdentity
+    } from "./device-identity.js";
+
 
     /* =========================================================
        FIREBASE
@@ -105,6 +110,7 @@
 
     let privateKey = null;
     let publicKeyJwk = null;
+    let deviceIdentity = null;
 
     let sharedSecretCache = new Map();
 
@@ -7172,6 +7178,20 @@
        */
 
       await ensureIdentity();
+
+      /*
+       * Etapa 3A: cria e registra uma identidade independente
+       * para esta instalação. A criptografia das mensagens
+       * continua na V2 até a integração das etapas seguintes.
+       */
+      deviceIdentity = await ensureDeviceIdentity(me.uid);
+      try {
+        await registerDeviceIdentity(db, me.uid, deviceIdentity, serverTimestamp);
+        console.info("CrIArt: identidade deste dispositivo registrada.", deviceIdentity.deviceId);
+      } catch (deviceRegistryError) {
+        console.error("CrIArt: não foi possível registrar a identidade do dispositivo.", deviceRegistryError);
+        showToast("Não foi possível registrar este dispositivo. A conversa atual continuará disponível.");
+      }
 
 
       /*
