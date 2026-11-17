@@ -16,7 +16,7 @@
 
   <title>CrIArt</title>
 
-  <link rel="stylesheet" href="./css/app.css?v=3">
+  <link rel="stylesheet" href="./css/app.css?v=4">
 </head>
 
 <body>
@@ -74,6 +74,43 @@
         O conteúdo da conversa é cifrado no navegador antes de ser enviado ao Firebase.
       </p>
 
+    </div>
+  </section>
+
+
+  <!-- =========================
+       VINCULAÇÃO DE DISPOSITIVO
+       ========================= -->
+  <section id="devicePairingGate" class="screen hidden">
+    <div class="card pairing-gate-card">
+      <div class="brand">CrIArt</div>
+      <div class="sub">Vinculação segura de dispositivo</div>
+      <p id="pairingGateStatus" class="pairing-status">Preparando vinculação…</p>
+
+      <div id="pairingClientForm">
+        <button id="pairingScanBtn" class="primary" type="button">Ler QR Code com a câmera</button>
+        <div id="pairingCameraWrap" class="pairing-camera hidden">
+          <video id="pairingVideo" playsinline muted></video>
+        </div>
+        <label class="tiny" for="pairingOfferText">Ou cole o conteúdo do convite</label>
+        <textarea id="pairingOfferText" class="field pairing-offer" rows="4" placeholder="Conteúdo do convite de pareamento"></textarea>
+        <button id="pairingPasteBtn" class="secondary" type="button">Validar convite</button>
+        <div id="pairingClientWaiting" class="pairing-step hidden">
+          <span class="tiny">Código deste aparelho</span>
+          <strong id="pairingClientCode" class="pairing-code"></strong>
+          <p class="tiny">Compare com o código exibido no aparelho que está autorizando.</p>
+        </div>
+        <div id="pairingClientConfirm" class="pairing-step hidden">
+          <label class="tiny" for="pairingClientHostCode">Digite o código exibido no aparelho autorizador</label>
+          <input id="pairingClientHostCode" class="field" inputmode="numeric" maxlength="6" placeholder="000000">
+          <button id="pairingClientFinish" class="primary" type="button">Confirmar e concluir vínculo</button>
+        </div>
+      </div>
+
+      <div id="pairingClientDone" class="pairing-step hidden">
+        <strong>Vínculo concluído</strong>
+      </div>
+      <button id="pairingCancelBtn" class="secondary" type="button">Sair</button>
     </div>
   </section>
 
@@ -273,6 +310,71 @@
 
       </div>
 
+
+
+      <!-- GERENCIAMENTO DE DISPOSITIVOS -->
+      <section id="deviceManagementPanel" class="device-management hidden">
+        <div class="device-panel-heading">
+          <strong>Dispositivos vinculados</strong>
+          <span class="tiny">Vincule outro aparelho por QR Code.</span>
+        <p class="device-security-note">A revogação abaixo é cooperativa: impede a inclusão do aparelho em novos envelopes após a atualização do inventário. Como a chave raiz é compartilhada no pareamento atual, ela ainda não impede um aparelho comprometido de tentar se registrar novamente. A revogação forte depende da rotação da raiz ou de validação por servidor.</p>
+        </div>
+        <div id="pairingDeviceList" class="device-list"></div>
+        <button id="pairingStartBtn" class="secondary" type="button">Vincular novo aparelho</button>
+        <div id="pairingHostActive" class="pairing-host hidden">
+          <div id="pairingQr" class="pairing-qr"></div>
+          <p id="pairingSessionExpiry" class="tiny"></p>
+          <p id="pairingHostStatus" class="pairing-status">Aguardando novo aparelho…</p>
+          <div id="pairingHostConfirm" class="pairing-step hidden">
+            <span class="tiny">Código de segurança</span>
+            <strong id="pairingHostCode" class="pairing-code"></strong>
+            <label class="tiny pairing-check"><input id="pairingHostMatch" type="checkbox"> Os códigos são idênticos nos dois aparelhos.</label>
+            <button id="pairingHostConfirmBtn" class="primary" type="button">Autorizar este dispositivo</button>
+          </div>
+          <button id="pairingHostCancelBtn" class="secondary" type="button">Cancelar pareamento</button>
+        </div>
+      </section>
+
+      <!-- SINCRONIZAÇÃO DE IDENTIDADE APÓS PERÍODO OFFLINE -->
+      <section id="rootRotationSyncPanel" class="history-migration-panel">
+        <div class="device-panel-heading">
+          <strong>Segurança da identidade</strong>
+          <span class="tiny">Verifique se a identidade raiz deste aparelho está atualizada.</span>
+        </div>
+        <p id="rootRotationSyncStatus" class="tiny" aria-live="polite">A sincronização será disponibilizada quando o serviço seguro estiver configurado.</p>
+        <div class="history-migration-actions">
+          <button id="rootRotationSyncBtn" class="secondary" type="button">Verificar atualizações de segurança</button>
+        </div>
+        <p class="tiny">A verificação não altera mensagens nem chaves privadas. Aparelhos com autoridade raiz local exigem recuperação assistida.</p>
+      </section>
+
+      <!-- MIGRAÇÃO DO HISTÓRICO LEGADO -->
+      <section id="historyMigrationPanel" class="history-migration-panel">
+        <div class="device-panel-heading">
+          <strong>Migração do histórico</strong>
+          <span class="tiny">Converta mensagens antigas para acesso nos dispositivos vinculados.</span>
+        </div>
+        <p id="historyMigrationStatus" class="tiny" aria-live="polite">Disponível somente em um aparelho original que ainda possua a chave V2.</p>
+        <div class="history-migration-actions">
+          <button id="historyMigrationPreviewBtn" class="secondary" type="button" disabled>Verificar mensagens</button>
+          <button id="historyMigrationRunBtn" class="primary" type="button" disabled>Migrar próximo lote (25)</button>
+        </div>
+        <p class="tiny">A migração substitui o conteúdo cifrado das mensagens próprias. Faça backup antes de iniciar. Mensagens recebidas e anexos são tratados separadamente.</p>
+      </section>
+
+      <!-- MIGRAÇÃO DOS ANEXOS LEGADOS -->
+      <section id="attachmentMigrationPanel" class="history-migration-panel">
+        <div class="device-panel-heading">
+          <strong>Migração dos anexos antigos</strong>
+          <span class="tiny">Converta arquivos V2 para compartilhamento entre dispositivos vinculados.</span>
+        </div>
+        <p id="attachmentMigrationStatus" class="tiny" aria-live="polite">Disponível em aparelho original com a chave V2. Os arquivos antigos serão preservados.</p>
+        <div class="history-migration-actions">
+          <button id="attachmentMigrationPreviewBtn" class="secondary" type="button" disabled>Verificar anexos</button>
+          <button id="attachmentMigrationRunBtn" class="primary" type="button" disabled>Migrar próximo lote (10)</button>
+        </div>
+        <p class="tiny">A migração cria um novo arquivo cifrado e atualiza a mensagem somente após o upload. O arquivo V2 original não é apagado. Faça backup antes de iniciar.</p>
+      </section>
 
       <!-- BLOQUEIO AUTOMÁTICO -->
       <div class="setting">

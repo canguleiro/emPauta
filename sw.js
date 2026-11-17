@@ -1,4 +1,4 @@
-const CACHE_VERSION = "criart-v10";
+const CACHE_VERSION = "criart-v12";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 
 const STATIC_ASSETS = [

@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import { createAccountRootIdentity, createDeviceIdentity } from '../js/device-pairing.js';
+import { createRootRotationBundle } from '../js/device-root-rotation.js';
+import { verifyRootRotationChain, verifyRootRotationChainResponse } from '../js/device-root-rotation-chain.js';
+
+const uid = 'offline-chain-test-user';
+const root1 = await createAccountRootIdentity(); root1.rootEpoch = 1;
+const devices = await Promise.all([1, 2].map(() => createDeviceIdentity(uid, root1.privateKey)));
+const bundle2 = await createRootRotationBundle({ uid, oldRootIdentity: root1, activeCertificates: devices.map(d => d.certificate) });
+bundle2.newRootIdentity.rootEpoch = 2;
+const bundle3 = await createRootRotationBundle({ uid, oldRootIdentity: { ...bundle2.newRootIdentity, rootEpoch: 2 }, activeCertificates: bundle2.certificates });
+const valid = await verifyRootRotationChain({ uid, trustedRootPublicKeyJwk: root1.publicKeyJwk, trustedRootEpoch: 1, transitions: [bundle2, bundle3] });
+assert.equal(valid.valid, true);
+assert.equal(valid.rootEpoch, 3);
+assert.deepEqual(valid.transitions.map(x => x.rootEpoch), [2, 3]);
+const response = await verifyRootRotationChainResponse({ uid, trustedRootPublicKeyJwk: root1.publicKeyJwk, trustedRootEpoch: 1, response: { uid, fromEpoch: 1, currentEpoch: 3, transitions: [{ bundle: bundle2 }, { bundle: bundle3 }] } });
+assert.equal(response.valid, true);
+assert.equal((await verifyRootRotationChain({ uid, trustedRootPublicKeyJwk: root1.publicKeyJwk, trustedRootEpoch: 1, transitions: [bundle3] })).reason, 'epoch-gap');
+assert.equal((await verifyRootRotationChain({ uid, trustedRootPublicKeyJwk: root1.publicKeyJwk, trustedRootEpoch: 2, transitions: [bundle2] })).reason, 'rollback-or-replay');
+const tampered = structuredClone(bundle3); tampered.transition.newRootPublicKeyJwk.x = 'tampered';
+assert.equal((await verifyRootRotationChain({ uid, trustedRootPublicKeyJwk: root1.publicKeyJwk, trustedRootEpoch: 1, transitions: [bundle2, tampered] })).valid, false);
+assert.equal((await verifyRootRotationChainResponse({ uid, trustedRootPublicKeyJwk: root1.publicKeyJwk, trustedRootEpoch: 1, response: { uid, fromEpoch: 1, currentEpoch: 4, transitions: [{ bundle: bundle2 }, { bundle: bundle3 }] } })).reason, 'server-head-mismatch');
+console.log('PASS: offline root rotation chain, sequential trust, epoch continuity, replay/gap/tamper rejection and server-head binding');

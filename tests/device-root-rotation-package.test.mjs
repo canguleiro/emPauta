@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import { createAccountRootIdentity, createDeviceIdentity } from '../js/device-pairing.js';
+import { createRootRotationBundle } from '../js/device-root-rotation.js';
+import { serializeRootRotationPackage, parseRootRotationPackage, validateRootRotationPackage } from '../js/device-root-rotation-package.js';
+
+const uid = 'rotation-package-test-user';
+const oldRoot = await createAccountRootIdentity();
+oldRoot.rootEpoch = 7;
+const devices = await Promise.all([1, 2, 3].map(() => createDeviceIdentity(uid, oldRoot.privateKey)));
+const created = await createRootRotationBundle({ uid, oldRootIdentity: oldRoot, activeCertificates: devices.map(x => x.certificate) });
+const serialized = serializeRootRotationPackage(created);
+assert.equal(serialized.includes('newRootIdentity'), false);
+assert.equal(serialized.includes('privateKey'), false);
+const parsed = parseRootRotationPackage(serialized);
+assert.equal(parsed.certificates.length, 3);
+const valid = await validateRootRotationPackage({ serialized, expectedUid: uid, trustedOldRootPublicKeyJwk: oldRoot.publicKeyJwk, trustedRootEpoch: 7 });
+assert.equal(valid.valid, true);
+assert.equal(valid.rootEpoch, 8);
+assert.equal((await validateRootRotationPackage({ serialized, expectedUid: uid, trustedOldRootPublicKeyJwk: oldRoot.publicKeyJwk, trustedRootEpoch: 8 })).reason, 'rollback-or-replay');
+assert.equal((await validateRootRotationPackage({ serialized, expectedUid: 'wrong', trustedOldRootPublicKeyJwk: oldRoot.publicKeyJwk, trustedRootEpoch: 7 })).reason, 'uid-mismatch');
+assert.equal((await validateRootRotationPackage({ serialized, expectedUid: uid, trustedOldRootPublicKeyJwk: oldRoot.publicKeyJwk, trustedRootEpoch: 5 })).reason, 'epoch-gap');
+assert.throws(() => parseRootRotationPackage('{bad json'), /JSON válido/);
+assert.throws(() => parseRootRotationPackage(JSON.stringify({ format: 'wrong' })), /não reconhecido/);
+assert.equal(serializeRootRotationPackage({ ...created, privateKey: 'must-not-leak' }).includes('must-not-leak'), false);
+console.log('PASS: public rotation package roundtrip, secret exclusion, signature validation, UID binding and anti-rollback epoch checks');
