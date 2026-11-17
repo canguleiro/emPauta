@@ -2548,3 +2548,48 @@ header .actions{
     padding-top:12px;
   }
 }
+
+
+/* =========================================================
+   CrIArt — GERENCIAMENTO E VINCULAÇÃO DE DISPOSITIVOS
+========================================================= */
+.pairing-gate-card{width:min(92vw,440px);max-height:90vh;overflow:auto}
+.pairing-status{font-size:13px;line-height:1.5;color:#59635f;margin:14px 0}
+.pairing-status.error-text{color:#a52b20}
+.pairing-camera{margin:12px 0;border-radius:14px;overflow:hidden;background:#111}
+.pairing-camera video{display:block;width:100%;max-height:260px;object-fit:cover}
+.pairing-offer{width:100%;min-height:84px;resize:vertical;margin:8px 0}
+.pairing-step{margin:14px 0;padding:14px;border-radius:14px;background:#f0f2f1;display:flex;flex-direction:column;gap:10px}
+.pairing-code{display:block;font-size:30px;letter-spacing:.2em;text-align:center;color:#263b34;font-variant-numeric:tabular-nums}
+.device-management{margin:14px 0;padding:14px 0;border-top:1px solid #e5e8e6;border-bottom:1px solid #e5e8e6}
+.device-panel-heading{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.device-list{display:flex;flex-direction:column;gap:7px;margin:10px 0}
+.device-row{display:flex;flex-direction:column;gap:3px;padding:9px 11px;background:#f3f5f4;border-radius:10px}
+.device-row strong{font-size:12px;color:#303a36}
+.device-row span{font-size:10px;color:#77817c}
+.pairing-host{margin-top:12px;padding:12px;border-radius:14px;background:#f3f5f4}
+.pairing-qr{display:flex;justify-content:center;align-items:center;padding:10px;background:#fff;border-radius:12px}
+.pairing-qr svg{display:block;max-width:100%;height:auto}
+.pairing-check{display:flex;align-items:center;gap:8px}
+.pairing-check input{width:17px;height:17px}
+@media(max-width:650px){
+  .pairing-gate-card{width:min(100%,390px);padding:22px}
+  .pairing-code{font-size:27px}
+}
+
+
+/* CrIArt — migração controlada do histórico */
+.history-migration-panel{margin:14px 0;padding:14px 0;border-bottom:1px solid #e5e8e6;display:flex;flex-direction:column;gap:9px}
+.history-migration-panel p{margin:0;line-height:1.5}
+.history-migration-actions{display:flex;gap:8px;flex-wrap:wrap}
+.history-migration-actions button{flex:1;min-width:150px}
+.history-migration-actions button:disabled{opacity:.45;cursor:not-allowed}
+.device-row{flex-direction:row;align-items:center;justify-content:space-between;gap:10px}
+.device-row-info{display:flex;flex-direction:column;gap:3px;min-width:0}
+.device-revoke-btn{flex:0 0 auto;padding:6px 10px;border:1px solid #d9a4a4;border-radius:8px;background:#fff;color:#9b3434;font-size:11px}
+.device-revoke-btn:focus-visible{outline:2px solid #9b3434;outline-offset:2px}
+.device-row{flex-direction:row;align-items:center;justify-content:space-between;gap:10px}
+.device-row-info{display:flex;flex-direction:column;gap:3px;min-width:0}
+.device-revoke-btn{flex:0 0 auto;padding:6px 10px;border:1px solid #d9a4a4;border-radius:8px;background:#fff;color:#9b3434;font-size:11px}
+.device-revoke-btn:focus-visible{outline:2px solid #9b3434;outline-offset:2px}
+.device-security-note{margin:8px 0;padding:9px 10px;border-left:3px solid #c28a42;background:#fbf7ef;color:#765a32;font-size:10px;line-height:1.45}

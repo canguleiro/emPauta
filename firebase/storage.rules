@@ -13,7 +13,7 @@ service firebase.storage {
     match /private/private-room/media/{fileName} {
       allow read: if isAuthorized();
       allow write: if isAuthorized()
-        && request.resource.size < 8 * 1024 * 1024
+        && request.resource.size < 9 * 1024 * 1024
         && request.resource.contentType == 'application/octet-stream';
       allow delete: if isAuthorized();
     }
