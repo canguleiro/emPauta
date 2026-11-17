@@ -22,6 +22,57 @@ service cloud.firestore {
       allow delete: if isAuthorized() && request.auth.uid == uid;
     }
 
+
+    // Transporte temporário de pareamento. As regras restringem por UID,
+    // mas não validam assinaturas ECDSA nem distinguem aparelhos do mesmo UID.
+    match /private/private-room/pairingSessions/{sessionId} {
+      allow read: if isAuthorized() && resource.data.ownerUid == request.auth.uid;
+      allow create: if isAuthorized()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.sessionId == sessionId
+        && request.resource.data.state == 'offered'
+        && request.resource.data.keys().hasOnly([
+          'ownerUid','sessionId','version','offer','request','response','state',
+          'createdAt','createdAtMs','expiresAt','expiresAtMs'
+        ]);
+      allow update: if isAuthorized()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.sessionId == resource.data.sessionId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'request','response','state','requestAt','responseAt'
+        ])
+        && request.resource.data.state in ['requested','completed'];
+      allow delete: if isAuthorized() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    match /private/private-room/deviceRoots/{uid} {
+      allow read: if isAuthorized();
+      // TOFU: primeira gravação apenas. Sem backend, a regra não consegue
+      // provar que a chave é legítima; os clientes devem fixá-la e verificar certificados.
+      allow create: if isAuthorized() && request.auth.uid == uid
+        && request.resource.data.ownerUid == uid
+        && request.resource.data.algorithm == 'ECDSA-P256-SHA256';
+      allow update, delete: if false;
+    }
+
+    match /private/private-room/devices/{uid}/items/{deviceId} {
+      allow read: if isAuthorized();
+      allow create: if isAuthorized() && request.auth.uid == uid
+        && request.resource.data.ownerUid == uid
+        && request.resource.data.deviceId == deviceId
+        && request.resource.data.state == 'active';
+      allow update: if isAuthorized() && request.auth.uid == uid
+        && resource.data.ownerUid == uid
+        && request.resource.data.ownerUid == uid
+        && request.resource.data.deviceId == deviceId
+        && resource.data.state == 'active'
+        && request.resource.data.state == 'revoked'
+        && request.resource.data.revokedAtMs is number
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state','revokedAt','revokedAtMs']);
+      allow delete: if false;
+    }
+
     match /private/private-room/settings/{documentId} {
       allow read: if isAuthorized();
       allow write: if false;
@@ -32,16 +83,33 @@ service cloud.firestore {
 
       allow create: if isAuthorized()
         && request.resource.data.senderUid == request.auth.uid
-        && request.resource.data.keys().hasOnly([
-          'senderUid','senderNick','ciphertext','salt','iv','v',
-          'createdAt','createdAtMs','seenBy','edited','reactions'
-        ])
-        && request.resource.data.ciphertext is string
-        && request.resource.data.salt is string
-        && request.resource.data.iv is string
-        && request.resource.data.v == 2
         && request.resource.data.seenBy is list
-        && request.resource.data.reactions is map;
+        && request.resource.data.reactions is map
+        && (
+          (
+            request.resource.data.keys().hasOnly([
+              'senderUid','senderNick','ciphertext','salt','iv','v',
+              'createdAt','createdAtMs','seenBy','edited','reactions'
+            ])
+            && request.resource.data.ciphertext is string
+            && request.resource.data.salt is string
+            && request.resource.data.iv is string
+            && request.resource.data.v == 2
+          )
+          ||
+          (
+            request.resource.data.keys().hasOnly([
+              'senderUid','senderNick','envelope','v',
+              'createdAt','createdAtMs','seenBy','edited','reactions'
+            ])
+            && request.resource.data.envelope is map
+            && request.resource.data.envelope.v == 3
+            && request.resource.data.envelope.messageId is string
+            && request.resource.data.envelope.senderUid == request.auth.uid
+            && request.resource.data.envelope.purpose == 'message'
+            && request.resource.data.v == 3
+          )
+        );
 
       // O próprio remetente pode editar o conteúdo cifrado ou apagar.
       // Qualquer um dos dois pode apenas acrescentar o próprio UID a seenBy.
@@ -49,7 +117,7 @@ service cloud.firestore {
         (
           request.auth.uid == resource.data.senderUid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'ciphertext','salt','iv','v','edited'
+            'ciphertext','salt','iv','envelope','v','edited'
           ])
         )
         || (

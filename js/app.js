@@ -28,6 +28,8 @@
       deleteDoc,
       limit,
       getDocs,
+      startAfter,
+      documentId,
       where
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -40,9 +42,22 @@
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
     import {
-      ensureDeviceIdentity,
-      registerDeviceIdentity
-    } from "./device-identity.js";
+      prepareDeviceAccess,
+      loadAuthorizedDeviceInventory,
+      loadPinnedDeviceRoot
+    } from "./device-management.js";
+    import { synchronizeOfflineDeviceRoot } from "./device-root-rotation-sync.js";
+    import { migrateOwnedV2History } from "./history-migration.js";
+    import { migrateOwnedV2Attachments } from "./attachment-migration.js";
+    import { collectMessageHistoryPages } from "./message-history-pagination.js";
+    import {
+      encryptJsonForDevices,
+      decryptJsonForDevice,
+      encryptForDevices,
+      decryptForDevice,
+      envelopeCiphertextBytes,
+      envelopeMetadata
+    } from "./multidevice-envelope.js";
 
 
     /* =========================================================
@@ -62,6 +77,8 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
     const storage = getStorage(app);
+
+    window.__criartSignOut = () => signOut(auth);
 
     const ROOM_ID = "private-room";
 
@@ -97,6 +114,13 @@
     const dec = new TextDecoder();
 
     let me = null;
+    let deviceCryptoContext = null;
+    let hasLegacyV2Identity = false;
+    let historyMigrationBusy = false;
+    let historyMigrationEligible = 0;
+    let attachmentMigrationBusy = false;
+    let attachmentMigrationEligible = 0;
+    const v3InventoryCache = new Map();
     let members = null;
     let myNick = "";
 
@@ -110,7 +134,6 @@
 
     let privateKey = null;
     let publicKeyJwk = null;
-    let deviceIdentity = null;
 
     let sharedSecretCache = new Map();
 
@@ -772,6 +795,75 @@
           );
 
       return ids[0] || null;
+    }
+
+
+    let ownDeviceAuthorizationCheckedAt = 0;
+
+    async function refreshCurrentDeviceAuthorization(force = false) {
+      if (!deviceCryptoContext?.localDevice) {
+        throw new Error("A identidade local V3 não está disponível.");
+      }
+      if (!force && Date.now() - ownDeviceAuthorizationCheckedAt < 5000) return;
+      const inventory = await loadAuthorizedDeviceInventory(db, me.uid);
+      const currentId = deviceCryptoContext.localDevice.deviceId;
+      if (!inventory.authorized.some(item => item.deviceId === currentId)) {
+        deviceCryptoContext = null;
+        ownDeviceAuthorizationCheckedAt = 0;
+        sessionReady = false;
+        updateSendState();
+        throw new Error("Este dispositivo não está mais autorizado. Encerre a sessão e procure um aparelho ainda autorizado.");
+      }
+      deviceCryptoContext.authorizedDevices = inventory.authorized;
+      deviceCryptoContext.rootPublicKeyJwk = inventory.rootPublicKeyJwk;
+      ownDeviceAuthorizationCheckedAt = Date.now();
+    }
+
+    async function getV3CryptoContext(otherUid) {
+      if (!deviceCryptoContext?.localDevice || !deviceCryptoContext?.rootPublicKeyJwk) {
+        throw new Error("A identidade deste dispositivo não está pronta para criptografia V3.");
+      }
+      await refreshCurrentDeviceAuthorization();
+      let otherInventory = v3InventoryCache.get(otherUid);
+      if (!otherInventory || Date.now() - otherInventory.loadedAt > 10000) {
+        const inventory = await loadAuthorizedDeviceInventory(db, otherUid);
+        otherInventory = { ...inventory, loadedAt: Date.now() };
+        v3InventoryCache.set(otherUid, otherInventory);
+      }
+      const ownDevices = deviceCryptoContext.authorizedDevices;
+      const recipients = [...ownDevices, ...otherInventory.authorized];
+      const rootPublicKeys = {
+        [me.uid]: deviceCryptoContext.rootPublicKeyJwk,
+        [otherUid]: otherInventory.rootPublicKeyJwk
+      };
+      return { senderDevice: deviceCryptoContext.localDevice, recipients, rootPublicKeys };
+    }
+
+    async function encryptMessageV3(value, messageId, otherUid) {
+      const context = await getV3CryptoContext(otherUid);
+      return encryptJsonForDevices({ ...context, value, messageId, purpose: "message" });
+    }
+
+    async function decryptMessageV3(envelope) {
+      if (!deviceCryptoContext?.localDevice) throw new Error("Identidade local V3 indisponível.");
+      await refreshCurrentDeviceAuthorization();
+      const senderUid = envelope?.senderUid;
+      if (!senderUid) throw new Error("Envelope sem remetente.");
+      let senderInventory;
+      if (senderUid === me.uid) {
+        senderInventory = { rootPublicKeyJwk: deviceCryptoContext.rootPublicKeyJwk };
+      } else {
+        senderInventory = v3InventoryCache.get(`root:${senderUid}`);
+        if (!senderInventory || Date.now() - senderInventory.loadedAt > 60000) {
+          senderInventory = { rootPublicKeyJwk: await loadPinnedDeviceRoot(db, senderUid), loadedAt: Date.now() };
+          v3InventoryCache.set(`root:${senderUid}`, senderInventory);
+        }
+      }
+      const rootPublicKeys = {
+        [me.uid]: deviceCryptoContext.rootPublicKeyJwk,
+        [senderUid]: senderInventory.rootPublicKeyJwk
+      };
+      return decryptJsonForDevice({ envelope, localDevice: deviceCryptoContext.localDevice, rootPublicKeys });
     }
 
 
@@ -4216,34 +4308,10 @@
       };
 
 
-      const payload =
-        await encryptObject(
-          body,
-          other,
-          m.id
-        );
-
+      const payload = await encryptMessageV3(body, m.id, other);
 
       try {
-
-        await updateDoc(
-          doc(MSGS, m.id),
-          {
-            ciphertext:
-              payload.ciphertext,
-
-            salt:
-              payload.salt,
-
-            iv:
-              payload.iv,
-
-            v:
-              payload.v,
-
-            edited: true
-          }
-        );
+        await updateDoc(doc(MSGS, m.id), { envelope: payload, v: 3, edited: true });
 
       } catch (e) {
 
@@ -4539,225 +4607,67 @@
        ANEXOS — CRIPTOGRAFIA
     ========================================================= */
 
-    async function encryptAttachment(
-      file,
-      otherUid
-    ) {
-
-      const max =
-        8 * 1024 * 1024;
-
-
-      if (
-        file.size > max
-      ) {
-
-        throw new Error(
-          "Para manter o app simples, anexos ficam limitados a 8 MB."
-        );
-      }
-
-
-      const plain =
-        await file.arrayBuffer();
-
-
-      const secret =
-        await getSharedSecret(
-          otherUid
-        );
-
-
-      const salt =
-        crypto.getRandomValues(
-          new Uint8Array(16)
-        );
-
-
-      const iv =
-        crypto.getRandomValues(
-          new Uint8Array(12)
-        );
-
-
-      const key =
-        await deriveMessageKey(
-          secret,
-          salt
-        );
-
-
-      const cipher =
-        await crypto.subtle.encrypt(
-          {
-            name: "AES-GCM",
-            iv
-          },
-          key,
-          plain
-        );
-
-
+    async function encryptAttachment(file, otherUid, messageId) {
+      const max = 8 * 1024 * 1024;
+      if (file.size > max) throw new Error("Para manter o app simples, anexos ficam limitados a 8 MB.");
+      const plain = new Uint8Array(await file.arrayBuffer());
+      const context = await getV3CryptoContext(otherUid);
+      const envelope = await encryptForDevices({
+        ...context,
+        plaintext: plain,
+        messageId,
+        purpose: "attachment"
+      });
       return {
-
-        cipher:
-          new Uint8Array(cipher),
-
-        salt:
-          b64(salt),
-
-        iv:
-          b64(iv),
-
-        type:
-          file.type,
-
-        name:
-          file.name
+        cipher: envelopeCiphertextBytes(envelope),
+        envelope: envelopeMetadata(envelope),
+        type: file.type || "application/octet-stream",
+        name: file.name,
+        size: file.size
       };
     }
 
+    async function decryptAttachment(media, otherUid) {
+      if (!media?.path) throw new Error("Caminho da mídia não encontrado.");
+      const storageRef = ref(storage, media.path);
+      if (media.envelope?.v === 3) await refreshCurrentDeviceAuthorization();
+      const cipher = await Promise.race([
+        getBytes(storageRef, 10 * 1024 * 1024),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Tempo limite ao baixar a mídia cifrada.")), 30000))
+      ]);
 
-    /* =========================================================
-       ANEXOS — DESCRIPTOGRAFIA
-    ========================================================= */
-
-    async function decryptAttachment(
-      media,
-      otherUid
-    ) {
-
-      if (
-        !media ||
-        !media.path
-      ) {
-
-        throw new Error(
-          "Caminho da mídia não encontrado."
-        );
+      // Novos anexos usam envelope V3 por dispositivo.
+      if (media.envelope?.v === 3) {
+        let senderRoot;
+        if (media.envelope.senderUid === me.uid) {
+          senderRoot = deviceCryptoContext?.rootPublicKeyJwk;
+        } else {
+          const cached = v3InventoryCache.get(`root:${media.envelope.senderUid}`);
+          if (cached && Date.now() - cached.loadedAt < 60000) senderRoot = cached.rootPublicKeyJwk;
+          else {
+            senderRoot = await loadPinnedDeviceRoot(db, media.envelope.senderUid);
+            v3InventoryCache.set(`root:${media.envelope.senderUid}`, { rootPublicKeyJwk: senderRoot, loadedAt: Date.now() });
+          }
+        }
+        const rootPublicKeys = {
+          [me.uid]: deviceCryptoContext.rootPublicKeyJwk,
+          [media.envelope.senderUid]: senderRoot
+        };
+        const plain = await decryptForDevice({
+          envelope: media.envelope,
+          localDevice: deviceCryptoContext.localDevice,
+          rootPublicKeys,
+          ciphertextBytes: new Uint8Array(cipher)
+        });
+        return new Blob([plain], { type: media.type || "application/octet-stream" });
       }
 
-
-      console.log(
-        "INICIANDO DOWNLOAD DA MÍDIA:",
-        {
-          path: media.path,
-          type: media.type,
-          name: media.name
-        }
-      );
-
-
-      const storageRef =
-        ref(
-          storage,
-          media.path
-        );
-
-
-      /*
-       * Impõe um limite de 30 segundos
-       * para o download.
-       *
-       * Assim o aplicativo nunca ficará
-       * indefinidamente em
-       * "Carregando mídia cifrada…".
-       */
-
-      const cipher =
-        await Promise.race([
-
-          getBytes(
-            storageRef,
-            10 * 1024 * 1024
-          ),
-
-          new Promise(
-            (_, reject) =>
-              setTimeout(
-                () =>
-                  reject(
-                    new Error(
-                      "Tempo limite ao baixar a mídia do Firebase Storage."
-                    )
-                  ),
-                30000
-              )
-          )
-
-        ]);
-
-
-      console.log(
-        "MÍDIA BAIXADA:",
-        cipher.byteLength,
-        "bytes"
-      );
-
-
-      /*
-       * Recupera o segredo compartilhado
-       * entre os dois dispositivos.
-       */
-
-      const secret =
-        await getSharedSecret(
-          otherUid
-        );
-
-
-      /*
-       * Recria exatamente a mesma chave
-       * utilizada durante a criptografia
-       * do anexo.
-       */
-
-      const key =
-        await deriveMessageKey(
-          secret,
-          unb64(
-            media.salt
-          )
-        );
-
-
-      console.log(
-        "DESCRIPTOGRAFANDO MÍDIA..."
-      );
-
-
-      const plain =
-        await crypto.subtle.decrypt(
-          {
-            name: "AES-GCM",
-
-            iv:
-              unb64(
-                media.iv
-              )
-          },
-
-          key,
-
-          cipher
-        );
-
-
-      console.log(
-        "MÍDIA DESCRIPTOGRAFADA COM SUCESSO."
-      );
-
-
-      return new Blob(
-        [
-          plain
-        ],
-        {
-          type:
-            media.type ||
-            "application/octet-stream"
-        }
-      );
+      // Compatibilidade: anexos V2 antigos continuam usando a chave legada.
+      if (!media.salt || !media.iv) throw new Error("Metadados de criptografia do anexo incompatíveis.");
+      const secret = await getSharedSecret(otherUid);
+      const key = await deriveMessageKey(secret, unb64(media.salt));
+      const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(media.iv) }, key, cipher);
+      return new Blob([plain], { type: media.type || "application/octet-stream" });
     }
 
 
@@ -4905,6 +4815,9 @@
         null;
 
       sharedSecretCache.clear();
+      v3InventoryCache.clear();
+      deviceCryptoContext = null;
+      ownDeviceAuthorizationCheckedAt = 0;
 
       updateSendState();
     }
@@ -4994,7 +4907,6 @@
         return;
       }
 
-
       const sendBtn =
         $("sendBtn");
 
@@ -5081,7 +4993,8 @@
           const e =
             await encryptAttachment(
               selectedFile,
-              other
+              other,
+              id
             );
 
 
@@ -5115,11 +5028,11 @@
             name:
               e.name,
 
-            salt:
-              e.salt,
+            size:
+              e.size,
 
-            iv:
-              e.iv
+            envelope:
+              e.envelope
           };
         }
 
@@ -5159,33 +5072,13 @@
          * Criptografia da mensagem.
          */
 
-        const encrypted =
-          await encryptObject(
-            body,
-            other,
-            id
-          );
-
+        const encrypted = await encryptMessageV3(body, id, other);
 
         const messageData = {
-
-          senderUid:
-            me.uid,
-
-          senderNick:
-            myNick,
-
-          ciphertext:
-            encrypted.ciphertext,
-
-          salt:
-            encrypted.salt,
-
-          iv:
-            encrypted.iv,
-
-          v:
-            encrypted.v,
+          senderUid: me.uid,
+          senderNick: myNick,
+          envelope: encrypted,
+          v: 3,
 
           createdAt:
             serverTimestamp(),
@@ -5431,14 +5324,9 @@
            * pública do remetente.
            */
 
-          const body =
-            await decryptObject(
-              d,
-              d.senderUid === me.uid
-                ? other
-                : d.senderUid,
-              d.id
-            );
+          const body = d.v === 3
+            ? await decryptMessageV3(d.envelope)
+            : await decryptObject(d, d.senderUid === me.uid ? other : d.senderUid, d.id);
 
 
           body.seenBy =
@@ -7173,25 +7061,54 @@
 
 
       /*
-       * Recupera ou cria a identidade
-       * criptográfica local.
+       * Verifica primeiro se este é um aparelho original,
+       * que já possui a chave legada da conversa. A checagem
+       * ocorre antes de qualquer criação/substituição de chave.
+       */
+
+      const legacyIdentity =
+        await idbGet(`privateKey:${me.uid}`);
+      hasLegacyV2Identity = !!(legacyIdentity?.privateKey && legacyIdentity?.publicKeyJwk);
+
+      const deviceAccess =
+        await prepareDeviceAccess({
+          db,
+          uid: me.uid,
+          hasLegacyIdentity: !!(
+            legacyIdentity?.privateKey &&
+            legacyIdentity?.publicKeyJwk
+          ),
+          nickname: myNick
+        });
+
+      if (!deviceAccess.ready) {
+        deviceCryptoContext = null;
+        $("authScreen")?.classList.add("hidden");
+        $("header")?.classList.add("hidden");
+        $("footer")?.classList.add("hidden");
+        $("devicePairingGate")?.classList.remove("hidden");
+        return;
+      }
+
+      $("devicePairingGate")?.classList.add("hidden");
+      deviceCryptoContext = deviceAccess.cryptoContext || null;
+      ownDeviceAuthorizationCheckedAt = Date.now();
+      if (!deviceCryptoContext) throw new Error("Não foi possível validar a identidade deste dispositivo.");
+      if ($("historyMigrationPreviewBtn")) $("historyMigrationPreviewBtn").disabled = !hasLegacyV2Identity;
+      if ($("historyMigrationRunBtn")) $("historyMigrationRunBtn").disabled = !hasLegacyV2Identity;
+      if ($("attachmentMigrationPreviewBtn")) $("attachmentMigrationPreviewBtn").disabled = !hasLegacyV2Identity;
+      if ($("attachmentMigrationRunBtn")) $("attachmentMigrationRunBtn").disabled = !hasLegacyV2Identity;
+      if (!hasLegacyV2Identity) {
+        setHistoryMigrationStatus("Este aparelho não possui a chave V2 original. A migração deve ser executada em um dos aparelhos antigos.");
+        setAttachmentMigrationStatus("Este aparelho não possui a chave V2 original. A migração deve ser executada em um dos aparelhos antigos.");
+      }
+
+      /*
+       * Recupera a identidade criptográfica legada.
+       * Somente aparelhos originais continuam usando V2.
        */
 
       await ensureIdentity();
-
-      /*
-       * Etapa 3A: cria e registra uma identidade independente
-       * para esta instalação. A criptografia das mensagens
-       * continua na V2 até a integração das etapas seguintes.
-       */
-      deviceIdentity = await ensureDeviceIdentity(me.uid);
-      try {
-        await registerDeviceIdentity(db, me.uid, deviceIdentity, serverTimestamp);
-        console.info("CrIArt: identidade deste dispositivo registrada.", deviceIdentity.deviceId);
-      } catch (deviceRegistryError) {
-        console.error("CrIArt: não foi possível registrar a identidade do dispositivo.", deviceRegistryError);
-        showToast("Não foi possível registrar este dispositivo. A conversa atual continuará disponível.");
-      }
 
 
       /*
@@ -7394,6 +7311,14 @@
         if (!user) {
 
           me = null;
+          hasLegacyV2Identity = false;
+          historyMigrationEligible = 0;
+          if ($("historyMigrationPreviewBtn")) $("historyMigrationPreviewBtn").disabled = true;
+          if ($("historyMigrationRunBtn")) $("historyMigrationRunBtn").disabled = true;
+          if ($("attachmentMigrationPreviewBtn")) $("attachmentMigrationPreviewBtn").disabled = true;
+          if ($("attachmentMigrationRunBtn")) $("attachmentMigrationRunBtn").disabled = true;
+          attachmentMigrationEligible = 0;
+          deviceCryptoContext = null;
 
           sessionReady =
             false;
@@ -7412,6 +7337,10 @@
           $("authScreen")
             ?.classList
             .remove("hidden");
+
+          $("devicePairingGate")
+            ?.classList
+            .add("hidden");
 
           if ($("authError")) {
             $("authError").textContent = "";
@@ -7557,6 +7486,10 @@
           $("authScreen")
             ?.classList
             .remove("hidden");
+
+          $("devicePairingGate")
+            ?.classList
+            .add("hidden");
 
 
           $("authError").textContent =
@@ -7859,6 +7792,208 @@
 
 
     /* =========================================================
+       MIGRAÇÃO CONTROLADA DO HISTÓRICO V2 → V3
+    ========================================================= */
+
+    async function loadHistoryMigrationRows() {
+      return collectMessageHistoryPages({
+        pageSize: 200,
+        maxPages: 250,
+        fetchPage: async ({ cursor, pageSize }) => {
+          const constraints = [orderBy(documentId(), "asc"), limit(pageSize)];
+          if (cursor) constraints.splice(1, 0, startAfter(cursor));
+          const snapshot = await getDocs(query(MSGS, ...constraints));
+          return {
+            items: snapshot.docs.map(item => ({ id: item.id, ...item.data() })),
+            nextCursor: snapshot.docs.length ? snapshot.docs[snapshot.docs.length - 1] : null
+          };
+        }
+      });
+    }
+
+    function setHistoryMigrationStatus(message, isError = false) {
+      const status = $("historyMigrationStatus");
+      if (!status) return;
+      status.textContent = message;
+      status.classList.toggle("error-text", !!isError);
+    }
+
+    function setHistoryMigrationBusy(busy) {
+      historyMigrationBusy = busy;
+      const preview = $("historyMigrationPreviewBtn");
+      const run = $("historyMigrationRunBtn");
+      if (preview) preview.disabled = busy;
+      if (run) run.disabled = busy || !hasLegacyV2Identity || historyMigrationEligible < 1;
+    }
+
+    async function runHistoryMigrationPreview() {
+      if (!hasLegacyV2Identity || !deviceCryptoContext?.localDevice) {
+        setHistoryMigrationStatus("A migração precisa ser executada em um aparelho original que ainda possua a chave V2.", true);
+        return;
+      }
+      setHistoryMigrationBusy(true);
+      try {
+        const otherUid = await getOtherUid();
+        if (!otherUid) throw new Error("Não foi possível identificar a outra conta da conversa.");
+        const scan = await loadHistoryMigrationRows();
+        const preview = await migrateOwnedV2History({
+          messages: scan.messages,
+          ownerUid: me.uid,
+          decryptLegacyMessage: message => decryptObject(message, otherUid, message.id),
+          encryptV3Message: async () => { throw new Error("Prévia não deve criptografar."); },
+          persistV3Message: async () => { throw new Error("Prévia não deve gravar."); },
+          dryRun: true,
+          maxItems: 25
+        });
+        historyMigrationEligible = preview.eligible;
+        setHistoryMigrationStatus(`${preview.eligible} mensagens próprias elegíveis encontradas em ${scan.scanned} registros (${scan.pages} páginas). A próxima execução processará até 25. ${preview.skipped} registros serão ignorados (mensagens recebidas, anexos ou registros inválidos).${scan.truncated ? " Limite de segurança atingido; execute novamente para continuar a varredura." : " Histórico integral consultado."}`);
+        if ($("historyMigrationRunBtn")) $("historyMigrationRunBtn").disabled = preview.eligible === 0;
+      } catch (error) {
+        console.error("Falha na prévia de migração:", error);
+        setHistoryMigrationStatus(error?.message || "Não foi possível preparar a prévia.", true);
+      } finally {
+        setHistoryMigrationBusy(false);
+      }
+    }
+
+    async function executeHistoryMigrationBatch() {
+      if (historyMigrationBusy || !hasLegacyV2Identity || !me) return;
+      const confirmed = window.confirm("Migrar até 25 mensagens de texto enviadas por esta conta? A operação substituirá o conteúdo cifrado V2 pelo envelope V3. Faça backup antes de continuar.");
+      if (!confirmed) return;
+      setHistoryMigrationBusy(true);
+      setHistoryMigrationStatus("Migrando mensagens… mantenha este aparelho conectado.");
+      try {
+        const otherUid = await getOtherUid();
+        if (!otherUid) throw new Error("Não foi possível identificar a outra conta da conversa.");
+        const scan = await loadHistoryMigrationRows();
+        const result = await migrateOwnedV2History({
+          messages: scan.messages,
+          ownerUid: me.uid,
+          maxItems: 25,
+          decryptLegacyMessage: message => decryptObject(message, otherUid, message.id),
+          encryptV3Message: (body, messageId) => encryptMessageV3(body, messageId, otherUid),
+          persistV3Message: (messageId, patch) => updateDoc(doc(MSGS, messageId), patch)
+        });
+        historyMigrationEligible = 0;
+        const details = `${result.migrated} migradas; ${result.failed} falharam; ${result.skipped} ignoradas.`;
+        setHistoryMigrationStatus(details + (result.migrated === 25 ? " Execute outra rodada para continuar." : " Atualize a prévia para verificar se ainda há mensagens pendentes.") + (scan.truncated ? " A varredura atingiu o limite de segurança; repita para percorrer o restante do histórico." : ""), result.failed > 0);
+        if (result.migrated > 0) showToast(`${result.migrated} mensagens migradas para V3.`);
+      } catch (error) {
+        console.error("Falha na migração do histórico:", error);
+        setHistoryMigrationStatus(error?.message || "A migração não foi concluída.", true);
+      } finally {
+        setHistoryMigrationBusy(false);
+      }
+    }
+
+
+    if ($("historyMigrationPreviewBtn")) {
+      $("historyMigrationPreviewBtn").onclick = runHistoryMigrationPreview;
+    }
+    if ($("historyMigrationRunBtn")) {
+      $("historyMigrationRunBtn").onclick = executeHistoryMigrationBatch;
+    }
+
+    /* =========================================================
+       MIGRAÇÃO CONTROLADA DOS ANEXOS V2 → V3
+    ========================================================= */
+
+    function setAttachmentMigrationStatus(message, isError = false) {
+      const status = $("attachmentMigrationStatus");
+      if (!status) return;
+      status.textContent = message;
+      status.classList.toggle("error-text", !!isError);
+    }
+
+    function setAttachmentMigrationBusy(busy) {
+      attachmentMigrationBusy = busy;
+      if ($("attachmentMigrationPreviewBtn")) $("attachmentMigrationPreviewBtn").disabled = busy || !hasLegacyV2Identity;
+      if ($("attachmentMigrationRunBtn")) $("attachmentMigrationRunBtn").disabled = busy || !hasLegacyV2Identity || attachmentMigrationEligible < 1;
+    }
+
+    async function runAttachmentMigrationPreview() {
+      if (!hasLegacyV2Identity || !deviceCryptoContext?.localDevice) {
+        setAttachmentMigrationStatus("Use um aparelho original que ainda possua a chave V2.", true);
+        return;
+      }
+      setAttachmentMigrationBusy(true);
+      try {
+        const otherUid = await getOtherUid();
+        if (!otherUid) throw new Error("Não foi possível identificar a outra conta da conversa.");
+        const scan = await loadHistoryMigrationRows();
+        const preview = await migrateOwnedV2Attachments({
+          messages: scan.messages,
+          ownerUid: me.uid,
+          decryptLegacyMessage: message => decryptObject(message, otherUid, message.id),
+          decryptLegacyAttachment: async media => new Uint8Array(await (await decryptAttachment(media, otherUid)).arrayBuffer()),
+          encryptV3Attachment: async ({ bytes, messageId, media }) => {
+            const file = new File([bytes], media.name || "anexo", { type: media.type || "application/octet-stream" });
+            return encryptAttachment(file, otherUid, messageId);
+          },
+          uploadV3Attachment: async () => "preview-only",
+          encryptV3Message: async () => { throw new Error("Prévia não deve cifrar novamente."); },
+          persistV3Message: async () => { throw new Error("Prévia não deve gravar."); },
+          dryRun: true,
+          maxItems: 10
+        });
+        attachmentMigrationEligible = preview.eligible;
+        setAttachmentMigrationStatus(`${preview.eligible} anexos próprios V2 elegíveis em ${scan.scanned} registros (${scan.pages} páginas). A próxima execução processará até 10. ${preview.skipped} registros serão ignorados.${scan.truncated ? " Limite de segurança atingido; execute novamente para continuar a varredura." : " Histórico integral consultado."}`);
+        if ($("attachmentMigrationRunBtn")) $("attachmentMigrationRunBtn").disabled = preview.eligible === 0;
+      } catch (error) {
+        console.error("Falha na prévia dos anexos:", error);
+        setAttachmentMigrationStatus(error?.message || "Não foi possível preparar a prévia.", true);
+      } finally {
+        setAttachmentMigrationBusy(false);
+      }
+    }
+
+    async function executeAttachmentMigrationBatch() {
+      if (attachmentMigrationBusy || !hasLegacyV2Identity || !me) return;
+      if (!window.confirm("Migrar até 10 anexos V2 enviados por esta conta? Os arquivos antigos serão preservados. Novos arquivos e mensagens V3 serão criados no Storage/Firestore. Faça backup antes de continuar.")) return;
+      setAttachmentMigrationBusy(true);
+      setAttachmentMigrationStatus("Migrando anexos… mantenha este aparelho conectado.");
+      try {
+        const otherUid = await getOtherUid();
+        if (!otherUid) throw new Error("Não foi possível identificar a outra conta da conversa.");
+        const scan = await loadHistoryMigrationRows();
+        const result = await migrateOwnedV2Attachments({
+          messages: scan.messages,
+          ownerUid: me.uid,
+          maxItems: 10,
+          decryptLegacyMessage: message => decryptObject(message, otherUid, message.id),
+          decryptLegacyAttachment: async media => new Uint8Array(await (await decryptAttachment(media, otherUid)).arrayBuffer()),
+          encryptV3Attachment: async ({ bytes, messageId, media }) => {
+            const file = new File([bytes], media.name || "anexo", { type: media.type || "application/octet-stream" });
+            return encryptAttachment(file, otherUid, messageId);
+          },
+          uploadV3Attachment: async (messageId, encrypted) => {
+            const path = `private/${ROOM_ID}/media/${messageId}.v3.bin`;
+            await uploadBytes(ref(storage, path), encrypted.cipher, {
+              contentType: "application/octet-stream",
+              cacheControl: "no-store"
+            });
+            return path;
+          },
+          encryptV3Message: (body, messageId) => encryptMessageV3(body, messageId, otherUid),
+          persistV3Message: (messageId, patch) => updateDoc(doc(MSGS, messageId), patch),
+          cleanupUploadedAttachment: async path => deleteObject(ref(storage, path))
+        });
+        attachmentMigrationEligible = 0;
+        const details = `${result.migrated} anexos migrados; ${result.failed} falharam; ${result.skipped} ignorados.`;
+        setAttachmentMigrationStatus(details + (result.migrated === 10 ? " Execute outra rodada para continuar." : " Atualize a prévia para verificar pendências.") + (scan.truncated ? " A varredura atingiu o limite de segurança; repita para percorrer o restante do histórico." : ""), result.failed > 0);
+        if (result.migrated > 0) showToast(`${result.migrated} anexos migrados para V3.`);
+      } catch (error) {
+        console.error("Falha na migração dos anexos:", error);
+        setAttachmentMigrationStatus(error?.message || "A migração dos anexos não foi concluída.", true);
+      } finally {
+        setAttachmentMigrationBusy(false);
+      }
+    }
+
+    if ($("attachmentMigrationPreviewBtn")) $("attachmentMigrationPreviewBtn").onclick = runAttachmentMigrationPreview;
+    if ($("attachmentMigrationRunBtn")) $("attachmentMigrationRunBtn").onclick = executeAttachmentMigrationBatch;
+
+    /* =========================================================
        CONFIGURAÇÕES
     ========================================================= */
 
@@ -7908,6 +8043,53 @@
           $("settingsModal")
             ?.classList
             .add("hidden");
+    }
+
+
+    // Sincronização explícita da cadeia de rotação para aparelhos que
+    // retornam do offline. O endpoint só pode vir da configuração de
+    // implantação; nunca é inferido nem apontado para produção por padrão.
+    const rootRotationSyncButton = $("rootRotationSyncBtn");
+    const rootRotationSyncStatus = $("rootRotationSyncStatus");
+    const rootRotationEndpoint = window.CRIART_ROOT_ROTATION_ENDPOINT || "";
+    if (rootRotationSyncButton) {
+      rootRotationSyncButton.disabled = !rootRotationEndpoint;
+      if (!rootRotationEndpoint && rootRotationSyncStatus) {
+        rootRotationSyncStatus.textContent = "Serviço seguro ainda não configurado nesta implantação.";
+      }
+      rootRotationSyncButton.onclick = async () => {
+        if (!me?.uid || !deviceCryptoContext?.localDevice?.deviceId || !auth.currentUser) {
+          if (rootRotationSyncStatus) rootRotationSyncStatus.textContent = "A identidade deste aparelho ainda não está disponível.";
+          return;
+        }
+        rootRotationSyncButton.disabled = true;
+        if (rootRotationSyncStatus) rootRotationSyncStatus.textContent = "Verificando cadeia de identidade…";
+        try {
+          const result = await synchronizeOfflineDeviceRoot({
+            uid: me.uid,
+            deviceId: deviceCryptoContext.localDevice.deviceId,
+            auth,
+            endpoint: rootRotationEndpoint
+          });
+          const messages = {
+            "up-to-date": `Identidade atualizada. Época ${result.rootEpoch}.`,
+            "synchronized": `Identidade sincronizada com segurança. Época ${result.rootEpoch}.`,
+            "authority-recovery-required": "Este aparelho possui autoridade raiz. A recuperação exige procedimento assistido; nenhuma chave foi alterada.",
+            "device-not-in-rotated-inventory": "Este aparelho não consta no inventário da nova identidade. A sincronização foi bloqueada.",
+            "rejected": `Cadeia rejeitada: ${result.reason || "falha de validação"}.`
+          };
+          if (rootRotationSyncStatus) rootRotationSyncStatus.textContent = messages[result.status] || "Estado de sincronização não reconhecido.";
+          if (result.status === "synchronized") {
+            deviceCryptoContext.rootPublicKeyJwk = result.rootPublicKeyJwk || deviceCryptoContext.rootPublicKeyJwk;
+            ownDeviceAuthorizationCheckedAt = 0;
+            await refreshCurrentDeviceAuthorization(true);
+          }
+        } catch (error) {
+          if (rootRotationSyncStatus) rootRotationSyncStatus.textContent = error?.message || "Falha ao verificar a identidade.";
+        } finally {
+          rootRotationSyncButton.disabled = !rootRotationEndpoint;
+        }
+      };
     }
 
 
