@@ -1,36 +1,29 @@
 <!doctype html>
 <html lang="pt-BR">
-<head><meta charset="utf-8"><title>CrIArt — teste real IndexedDB</title></head>
+<head>
+  <meta charset="utf-8">
+  <title>CrIArt — teste real IndexedDB</title>
+</head>
 <body>
-<h1>CrIArt — homologação IndexedDB/WebCrypto</h1>
-<pre id="result">RUNNING: aguardando IndexedDB e WebCrypto...</pre>
-<script>
-const result = document.querySelector('#result');
-let finished = false;
-const finish = (status, message) => {
-  if (finished) return;
-  finished = true;
-  result.textContent = message;
-  document.documentElement.dataset.testStatus = status;
-};
-window.addEventListener('error', event => finish('failed',
-  'FAIL: erro de carregamento ou execução: ' +
-  (event.message || event.error?.stack || 'Erro desconhecido')));
-window.addEventListener('unhandledrejection', event => finish('failed',
-  'FAIL: promessa rejeitada: ' +
-  (event.reason?.stack || event.reason || 'Erro desconhecido')));
+  <h1>CrIArt — homologação IndexedDB/WebCrypto</h1>
+  <pre id="result">RUNNING: aguardando IndexedDB e WebCrypto...</pre>
+  <script>
+    const result = document.querySelector('#result');
 
-// Mantém a página viva para que --dump-dom aguarde o teste assíncrono.
-const deadline = Date.now() + 55000;
-const observer = setInterval(() => {
-  const status = document.documentElement.dataset.testStatus;
-  if (status === 'passed' || status === 'failed') {
-    clearInterval(observer);
-  } else if (Date.now() > deadline) {
-    clearInterval(observer);
-    finish('failed', 'FAIL: tempo esgotado aguardando conclusão do teste IndexedDB.');
-  }
-}, 50);
-</script>
-<script type="module" src="./indexeddb-vault.browser.js"></script>
-</body></html>
+    window.addEventListener('error', event => {
+      result.textContent =
+        'FAIL: erro de carregamento ou execução: ' +
+        (event.message || event.error?.stack || 'Erro desconhecido');
+      document.documentElement.dataset.testStatus = 'failed';
+    });
+
+    window.addEventListener('unhandledrejection', event => {
+      result.textContent =
+        'FAIL: promessa rejeitada: ' +
+        (event.reason?.stack || event.reason || 'Erro desconhecido');
+      document.documentElement.dataset.testStatus = 'failed';
+    });
+  </script>
+  <script type="module" src="./indexeddb-vault.browser.js"></script>
+</body>
+</html>
