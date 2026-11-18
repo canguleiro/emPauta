@@ -8,17 +8,16 @@
   <h1>CrIArt — homologação IndexedDB/WebCrypto</h1>
   <pre id="result">RUNNING: aguardando IndexedDB e WebCrypto...</pre>
   <script>
-    const result = document.querySelector('#result');
-
     window.addEventListener('error', event => {
-      result.textContent =
+      const out = document.querySelector('#result');
+      if (out) out.textContent =
         'FAIL: erro de carregamento ou execução: ' +
         (event.message || event.error?.stack || 'Erro desconhecido');
       document.documentElement.dataset.testStatus = 'failed';
     });
-
     window.addEventListener('unhandledrejection', event => {
-      result.textContent =
+      const out = document.querySelector('#result');
+      if (out) out.textContent =
         'FAIL: promessa rejeitada: ' +
         (event.reason?.stack || event.reason || 'Erro desconhecido');
       document.documentElement.dataset.testStatus = 'failed';

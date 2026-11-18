@@ -2,7 +2,6 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PORT="${CRIART_TEST_PORT:-8765}"
-CHROME="${CHROME_BIN:-chromium}"
 TMP="$(mktemp -d)"
 SERVER_PID=""
 cleanup() {
@@ -27,23 +26,5 @@ if [[ "$READY" -ne 1 ]]; then
   exit 1
 fi
 
-# O orçamento de tempo virtual do Chrome controla a espera. Não usar setInterval
-# com Date.now(): no modo virtual, o relógio avança rapidamente e causa falso timeout.
-timeout 70s "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage \
-  --disable-background-networking --no-first-run --user-data-dir="$TMP/profile" \
-  --timeout=65000 --virtual-time-budget=60000 --dump-dom \
-  "http://127.0.0.1:$PORT/tests/browser/indexeddb-vault.browser.html" \
-  >"$TMP/dom.html" 2>"$TMP/chrome.log"
-
-if grep -q 'data-test-status="passed"' "$TMP/dom.html" && \
-   grep -q 'PASS: HOMOLOGAÇÃO REAL DO INDEXEDDB CONCLUÍDA' "$TMP/dom.html"; then
-  sed -n 's/.*<pre id="result">\(.*\)<\/pre>.*/\1/p' "$TMP/dom.html" | sed 's/\\n/\n/g'
-elif grep -q 'data-test-status="failed"' "$TMP/dom.html"; then
-  sed -n 's/.*<pre id="result">\(.*\)<\/pre>.*/\1/p' "$TMP/dom.html"
-  exit 1
-else
-  echo "FAIL: navegador encerrou sem sinalizar conclusão do teste." >&2
-  grep -o '<pre id="result">.*</pre>' "$TMP/dom.html" || cat "$TMP/dom.html"
-  cat "$TMP/chrome.log" >&2
-  exit 1
-fi
+cd "$ROOT"
+node tests/browser/run-indexeddb-browser-test.mjs
