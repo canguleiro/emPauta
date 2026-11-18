@@ -4,19 +4,37 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PORT="${CRIART_TEST_PORT:-8765}"
 CHROME="${CHROME_BIN:-chromium}"
 TMP="$(mktemp -d)"
-cleanup() { kill "${SERVER_PID:-}" 2>/dev/null || true; rm -rf "$TMP"; }
+SERVER_PID=""
+cleanup() { if [[ -n "$SERVER_PID" ]]; then kill "$SERVER_PID" 2>/dev/null || true; fi; rm -rf "$TMP"; }
 trap cleanup EXIT
+
 python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$ROOT" >"$TMP/http.log" 2>&1 &
 SERVER_PID=$!
-for _ in $(seq 1 50); do
-  if curl -fsS --max-time 1 "http://127.0.0.1:$PORT/tests/browser/indexeddb-vault.browser.html" >/dev/null; then break; fi
+READY=0
+for _ in $(seq 1 100); do
+  if curl -fsS --max-time 1 "http://127.0.0.1:$PORT/tests/browser/indexeddb-vault.browser.html" >/dev/null 2>&1; then READY=1; break; fi
   sleep 0.1
 done
-timeout 45s "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --user-data-dir="$TMP/profile" --timeout=20000 --virtual-time-budget=15000 --dump-dom "http://127.0.0.1:$PORT/tests/browser/indexeddb-vault.browser.html" >"$TMP/dom.html" 2>"$TMP/chrome.log"
+if [[ "$READY" -ne 1 ]]; then
+  cat "$TMP/http.log" >&2
+  echo "FAIL: servidor HTTP local não iniciou." >&2
+  exit 1
+fi
+
+timeout 70s "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage \
+  --disable-background-networking --no-first-run --user-data-dir="$TMP/profile" \
+  --timeout=65000 --virtual-time-budget=60000 --dump-dom \
+  "http://127.0.0.1:$PORT/tests/browser/indexeddb-vault.browser.html" \
+  >"$TMP/dom.html" 2>"$TMP/chrome.log"
+
 if grep -q 'data-test-status="passed"' "$TMP/dom.html" && grep -q 'PASS: HOMOLOGAÇÃO REAL DO INDEXEDDB CONCLUÍDA' "$TMP/dom.html"; then
   sed -n 's/.*<pre id="result">\(.*\)<\/pre>.*/\1/p' "$TMP/dom.html" | sed 's/\\n/\n/g'
+elif grep -q 'data-test-status="failed"' "$TMP/dom.html"; then
+  sed -n 's/.*<pre id="result">\(.*\)<\/pre>.*/\1/p' "$TMP/dom.html"
+  exit 1
 else
-  cat "$TMP/dom.html"
+  echo "FAIL: navegador encerrou sem sinalizar conclusão do teste." >&2
+  grep -o '<pre id="result">.*</pre>' "$TMP/dom.html" || cat "$TMP/dom.html"
   cat "$TMP/chrome.log" >&2
   exit 1
 fi
