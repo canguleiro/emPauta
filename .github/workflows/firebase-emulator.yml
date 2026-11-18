@@ -20,11 +20,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
+          cache: npm
+      - run: npm ci --no-audit --no-fund
       - run: npm test
 
   firestore-rules:
-    name: Firebase Emulator Security Tests
+    name: Firestore Emulator Security Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -32,9 +33,38 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
+          cache: npm
+      - run: npm ci --no-audit --no-fund
       - run: npm install --global firebase-tools
       - run: npm run test:emulator
+
+  auth-emulator:
+    name: Firebase Authentication Emulator Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --global firebase-tools
+      - run: npm run test:emulator:auth
+
+  storage-emulator:
+    name: Firebase Storage Emulator Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm install --global firebase-tools
+      - run: npm run test:emulator:storage
 
   browser-indexeddb:
     name: Browser IndexedDB and WebCrypto Tests
@@ -45,12 +75,27 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
       - name: Install stable Chrome
         id: setup-chrome
         uses: browser-actions/setup-chrome@v2
         with:
           chrome-version: stable
+      - run: npm ci --no-audit --no-fund
       - name: Run browser tests
         env:
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
         run: npm run test:browser:indexeddb
+
+  dependency-audit:
+    name: Dependency Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run test:audit
