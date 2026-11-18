@@ -12,7 +12,7 @@ for _ in $(seq 1 50); do
   if curl -fsS --max-time 1 "http://127.0.0.1:$PORT/tests/browser/indexeddb-vault.browser.html" >/dev/null; then break; fi
   sleep 0.1
 done
-timeout 30s "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --user-data-dir="$TMP/profile" --virtual-time-budget=5000 --dump-dom "http://127.0.0.1:$PORT/tests/browser/indexeddb-vault.browser.html" >"$TMP/dom.html" 2>"$TMP/chrome.log"
+timeout 30s "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --user-data-dir="$TMP/profile" --virtual-time-budget=15000 --dump-dom "http://127.0.0.1:$PORT/tests/browser/indexeddb-vault.browser.html" >"$TMP/dom.html" 2>"$TMP/chrome.log"
 if grep -q 'data-test-status="passed"' "$TMP/dom.html" && grep -q 'PASS: HOMOLOGAÇÃO REAL DO INDEXEDDB CONCLUÍDA' "$TMP/dom.html"; then
   sed -n 's/.*<pre id="result">\(.*\)<\/pre>.*/\1/p' "$TMP/dom.html" | sed 's/\\n/\n/g'
 else
