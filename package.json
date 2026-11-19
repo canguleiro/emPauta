@@ -7,12 +7,18 @@
     "test:pairing": "node tests/device-pairing.test.mjs && node tests/device-pairing-qr.test.mjs",
     "test:v3": "node tests/multidevice-envelope.test.mjs && node tests/message-v3-integration.test.mjs && node tests/attachment-v3.test.mjs && node tests/history-migration.test.mjs && node tests/attachment-migration.test.mjs && node tests/history-migration-ui.test.mjs && node tests/message-history-pagination.test.mjs && node tests/device-revocation.test.mjs && node tests/device-root-rotation.test.mjs && node tests/device-root-rotation-package.test.mjs && node tests/backend/root-rotation-service.test.mjs && node tests/device-root-rotation-journal.test.mjs && node tests/device-root-rotation-chain.test.mjs && node tests/device-root-rotation-sync.test.mjs && node tests/device-root-rotation-ui.test.mjs && node tests/root-rotation-end-to-end.test.mjs && node tests/crypto-key-hardening.test.mjs",
     "test:emulator": "firebase emulators:exec --only firestore --project criart-rules-emulator \"node tests/emulator/firestore-rules.emulator.test.mjs\"",
+    "test:emulator:auth": "firebase emulators:exec --only auth --project criart-rules-emulator \"node tests/emulator/auth-emulator.test.mjs\"",
+    "test:emulator:storage": "firebase emulators:exec --only storage --project criart-rules-emulator \"node tests/emulator/storage-rules.emulator.test.mjs\"",
     "test:browser:indexeddb": "bash tests/browser/run-indexeddb-browser-test.sh",
     "test:emulator:preflight": "bash scripts/check-emulator-prerequisites.sh",
-    "test:release-gates": "bash scripts/check-release-gates.sh"
+    "test:release-gates": "bash scripts/check-release-gates.sh",
+    "test:audit": "npm audit --audit-level=high"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^4.0.1",
     "firebase": "^11.6.1"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "1.14.5"
   }
 }
